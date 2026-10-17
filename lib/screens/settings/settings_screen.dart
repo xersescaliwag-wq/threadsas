@@ -3,11 +3,13 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/providers/core_providers.dart';
 import 'package:threads/screens/profile/follow_requests_screen.dart';
 import 'package:threads/screens/settings/account_list_screen.dart';
+import 'package:threads/screens/settings/instagram_screen.dart';
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -67,11 +69,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       navigator.popUntil((route) => route.isFirst);
     });
   }
-  CupertinoListTile _tile(IconData icon, String title, VoidCallback onTap) {
-    return CupertinoListTile(
+  AdaptiveListTile _tile(IconData icon, String title, VoidCallback onTap) {
+    return AdaptiveListTile(
       leading: Icon(icon),
       title: Text(title),
-      trailing: const CupertinoListTileChevron(),
+      trailing: const AppListChevron(),
       onTap: onTap,
     );
   }
@@ -88,34 +90,45 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               opacity: _busy ? 0.5 : 1,
               child: ListView(
                 children: [
-                  CupertinoListSection.insetGrouped(
+                  AppListSection(
                     header: const Text('Privacy'),
                     footer: const Text('To make your account private, use Edit profile on your profile page.'),
                     children: [
                       _tile(
-                        CupertinoIcons.person_badge_plus,
+                        AppIcons.person_badge_plus,
                         'Follow requests',
                         () => openScreen<void>(context, const FollowRequestsScreen()),
                       ),
                       _tile(
-                        CupertinoIcons.hand_raised,
+                        AppIcons.hand_raised,
                         'Blocked accounts',
                         () => openScreen<void>(context, const AccountListScreen(kind: AccountListKind.blocked)),
                       ),
                       _tile(
-                        CupertinoIcons.speaker_slash,
+                        AppIcons.speaker_slash,
                         'Muted accounts',
                         () => openScreen<void>(context, const AccountListScreen(kind: AccountListKind.muted)),
                       ),
                     ],
                   ),
-                  CupertinoListSection.insetGrouped(
+                  AppListSection(
+                    header: const Text('Sharing'),
+                    footer: const Text('Share the photo or video in a thread to Instagram as well.'),
+                    children: [
+                      _tile(
+                        AppIcons.arrow_2_squarepath,
+                        'Instagram',
+                        () => openScreen<void>(context, const InstagramScreen()),
+                      ),
+                    ],
+                  ),
+                  AppListSection(
                     header: const Text('Account'),
                     footer: email == null ? null : Text('Signed in as $email'),
                     children: [
-                      CupertinoListTile(title: const Text('Log out'), onTap: _logOut),
-                      CupertinoListTile(
-                        title: const Text('Delete account', style: TextStyle(color: CupertinoColors.systemRed)),
+                      AdaptiveListTile(title: const Text('Log out'), onTap: _logOut),
+                      AdaptiveListTile(
+                        title: Text('Delete account', style: TextStyle(color: context.colors.systemRed)),
                         onTap: _deleteAccount,
                       ),
                     ],
@@ -124,7 +137,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
-          if (_busy) const Center(child: CupertinoActivityIndicator(radius: 14)),
+          if (_busy) const Center(child: AppSpinner(radius: 14)),
         ],
       ),
     );

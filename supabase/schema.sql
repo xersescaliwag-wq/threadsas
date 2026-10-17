@@ -249,6 +249,30 @@ create trigger trg_threads_before_insert
 before insert on public.threads
 for each row execute function public.threads_before_insert();
 
+-- A reply may only point at a thread its author is allowed to see, and the same
+-- goes for a quote. This runs as the caller (security invoker), so the
+-- threads_select policy performs the visibility test and blocked or private
+-- threads stay out of reach. It cannot live in the threads_insert policy,
+-- because a policy may not query the table it is defined on.
+create or replace function public.threads_check_visible_refs()
+returns trigger language plpgsql security invoker set search_path = public as $$
+begin
+  if new.parent_id is not null
+     and not exists (select 1 from public.threads t where t.id = new.parent_id) then
+    raise exception 'The thread you are replying to is no longer available';
+  end if;
+  if new.quote_id is not null
+     and not exists (select 1 from public.threads t where t.id = new.quote_id) then
+    raise exception 'The thread you are quoting is no longer available';
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists trg_threads_visible_refs on public.threads;
+create trigger trg_threads_visible_refs
+before insert on public.threads
+for each row execute function public.threads_check_visible_refs();
+
 -- Re-extract hashtags and mentions when the text changes, and record the
 -- edit time.
 create or replace function public.threads_before_update()
@@ -606,14 +630,16 @@ using (
   )
 );
 
+-- A policy may not reference the table it is defined on: Postgres raises
+-- "infinite recursion detected in policy for relation threads" (42P17) and
+-- every insert fails. The foreign keys threads_parent_id_fkey and
+-- threads_quote_id_fkey already guarantee that the referenced threads exist,
+-- and trg_threads_visible_refs (Part B) keeps the original intent that you may
+-- only reply to or quote a thread you are allowed to see.
 drop policy if exists threads_insert on public.threads;
 create policy threads_insert on public.threads
 for insert to authenticated
-with check (
-  threads.author_id = auth.uid()
-  and (threads.parent_id is null or exists (select 1 from public.threads p where p.id = threads.parent_id))
-  and (threads.quote_id is null or exists (select 1 from public.threads q where q.id = threads.quote_id))
-);
+with check (threads.author_id = auth.uid());
 
 drop policy if exists threads_update_own on public.threads;
 create policy threads_update_own on public.threads
@@ -1175,6 +1201,349 @@ with check (
   community_id is null
   or public.is_community_member(community_id, auth.uid())
 );
+
+-- ============================================================================
+-- Step 21.6: Instagram cross-posting
+-- A signed-in user connects one Instagram professional account through OAuth,
+-- and can then share a thread's photo or video to Instagram as well. The Meta
+-- access token is never stored in a normal table: it lives in Supabase Vault,
+-- is written and read only by the two Edge Functions (which run with the
+-- service role), and the app can only see *that* an account is connected.
+-- ============================================================================
+
+-- Vault ships with every Supabase project; this line is a no-op when it is
+-- already installed and installs it otherwise.
+create extension if not exists supabase_vault with schema vault;
+
+-- One connected Instagram account per Threads user. token_secret_id is a
+-- pointer into vault.secrets; the token text itself is never in this table.
+create table if not exists public.instagram_accounts (
+  user_id          uuid primary key references public.profiles (id) on delete cascade,
+  ig_user_id       text not null,
+  page_id          text,
+  username         text,
+  token_secret_id  uuid,
+  token_expires_at timestamptz,
+  connected_at     timestamptz not null default now()
+);
+
+-- One row per thread that was (or was meant to be) posted to Instagram. The
+-- returned Instagram media id is kept so a later delete can act on the copy.
+create table if not exists public.instagram_posts (
+  thread_id   uuid primary key references public.threads (id) on delete cascade,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  ig_media_id text,
+  status      text not null default 'pending'
+              check (status in ('pending', 'published', 'failed')),
+  error       text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists instagram_posts_user_idx
+  on public.instagram_posts (user_id, created_at desc);
+
+drop trigger if exists trg_instagram_posts_touch on public.instagram_posts;
+create trigger trg_instagram_posts_touch
+before update on public.instagram_posts
+for each row execute function public.touch_profile_updated_at();
+
+alter table public.instagram_accounts enable row level security;
+alter table public.instagram_posts    enable row level security;
+
+-- A user may see whether their own account is connected, and the status of
+-- their own cross-posts. Nothing else: the functions are the only writers.
+drop policy if exists instagram_accounts_select_own on public.instagram_accounts;
+create policy instagram_accounts_select_own on public.instagram_accounts
+for select to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists instagram_posts_select_own on public.instagram_posts;
+create policy instagram_posts_select_own on public.instagram_posts
+for select to authenticated
+using (user_id = auth.uid());
+
+-- Only named columns are readable, so token_secret_id never reaches the app
+-- even though the row belongs to it.
+revoke all on public.instagram_accounts from anon, authenticated;
+grant select (user_id, ig_user_id, page_id, username, token_expires_at, connected_at)
+  on public.instagram_accounts to authenticated;
+
+revoke all on public.instagram_posts from anon, authenticated;
+grant select (thread_id, user_id, ig_media_id, status, error, created_at, updated_at)
+  on public.instagram_posts to authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Vault helpers. All three run with definer rights (so they may touch the
+-- vault schema) and are executable only by the service role, which is exactly
+-- what the Edge Functions use. A signed-in user can never call them directly.
+-- ----------------------------------------------------------------------------
+
+-- Stores or replaces one user's credentials.
+create or replace function public.set_instagram_credentials(
+  p_user_id    uuid,
+  p_ig_user_id text,
+  p_page_id    text,
+  p_username   text,
+  p_token      text,
+  p_expires_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  v_secret_id uuid;
+begin
+  select token_secret_id into v_secret_id
+    from public.instagram_accounts
+    where user_id = p_user_id;
+
+  if v_secret_id is null then
+    v_secret_id := vault.create_secret(
+      p_token,
+      'instagram_token_' || p_user_id::text,
+      'Instagram access token for user ' || p_user_id::text
+    );
+  else
+    perform vault.update_secret(v_secret_id, p_token);
+  end if;
+
+  insert into public.instagram_accounts
+    (user_id, ig_user_id, page_id, username, token_secret_id, token_expires_at, connected_at)
+  values
+    (p_user_id, p_ig_user_id, p_page_id, p_username, v_secret_id, p_expires_at, now())
+  on conflict (user_id) do update set
+    ig_user_id       = excluded.ig_user_id,
+    page_id          = excluded.page_id,
+    username         = excluded.username,
+    token_secret_id  = excluded.token_secret_id,
+    token_expires_at = excluded.token_expires_at,
+    connected_at     = now();
+end;
+$$;
+
+-- Returns one user's stored token, or null. Only the functions ever call this.
+create or replace function public.get_instagram_token(p_user_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public, vault
+as $$
+  select s.decrypted_secret
+  from public.instagram_accounts a
+  join vault.decrypted_secrets s on s.id = a.token_secret_id
+  where a.user_id = p_user_id;
+$$;
+
+-- Forgets the connection and removes the token from Vault.
+create or replace function public.disconnect_instagram(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  v_secret_id uuid;
+begin
+  select token_secret_id into v_secret_id
+    from public.instagram_accounts
+    where user_id = p_user_id;
+
+  delete from public.instagram_accounts where user_id = p_user_id;
+
+  if v_secret_id is not null then
+    delete from vault.secrets where id = v_secret_id;
+  end if;
+end;
+$$;
+
+revoke all on function public.set_instagram_credentials(uuid, text, text, text, text, timestamptz)
+  from public, anon, authenticated;
+revoke all on function public.get_instagram_token(uuid) from public, anon, authenticated;
+revoke all on function public.disconnect_instagram(uuid) from public, anon, authenticated;
+
+grant execute on function public.set_instagram_credentials(uuid, text, text, text, text, timestamptz)
+  to service_role;
+grant execute on function public.get_instagram_token(uuid) to service_role;
+grant execute on function public.disconnect_instagram(uuid) to service_role;
+
+-- ============================================================================
+-- Direct messages (not in the guide - added on request)
+--
+-- A conversation is a pair of people. `user_a` / `user_b` hold the two ids in
+-- canonical order (smallest first), so a pair maps to exactly one row and the
+-- row policies are plain column tests. A policy on `conversations` must not
+-- query `conversations` (Postgres raises 42P17 infinite recursion - the same
+-- trap as deviation 10 on `threads`), so the participant check never subqueries
+-- the row's own table.
+-- Conversations are only ever created by `start_conversation()` (security
+-- definer); there is no client insert policy.
+-- ============================================================================
+
+create table if not exists public.conversations (
+  id                uuid primary key default gen_random_uuid(),
+  user_a            uuid not null references public.profiles (id) on delete cascade,
+  user_b            uuid not null references public.profiles (id) on delete cascade,
+  -- Copy of the newest message, so the inbox is a single query.
+  last_message_body text,
+  last_message_at   timestamptz,
+  last_sender_id    uuid references public.profiles (id) on delete set null,
+  created_at        timestamptz not null default now(),
+  constraint conversations_two_people check (user_a <> user_b),
+  constraint conversations_pair unique (user_a, user_b)
+);
+create index if not exists conversations_recent_idx
+  on public.conversations (last_message_at desc nulls last);
+
+-- Per-person state. The read receipt lives here.
+create table if not exists public.conversation_participants (
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  user_id         uuid not null references public.profiles (id) on delete cascade,
+  last_read_at    timestamptz,
+  primary key (conversation_id, user_id)
+);
+
+create table if not exists public.messages (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  sender_id       uuid not null references public.profiles (id) on delete cascade,
+  body            text not null,
+  created_at      timestamptz not null default now(),
+  constraint messages_body_length check (char_length(body) between 1 and 4000)
+);
+create index if not exists messages_conversation_idx
+  on public.messages (conversation_id, created_at);
+
+alter table public.conversations             enable row level security;
+alter table public.conversation_participants enable row level security;
+alter table public.messages                  enable row level security;
+
+-- Opens the conversation between the caller and p_other, creating it the first
+-- time. Returns the id either way, so the app can call it unconditionally when
+-- the Message button is pressed.
+create or replace function public.start_conversation(p_other uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  v_me   uuid := auth.uid();
+  v_low  uuid;
+  v_high uuid;
+  v_id   uuid;
+begin
+  if v_me is null then
+    raise exception 'not authenticated';
+  end if;
+  if p_other is null or p_other = v_me then
+    raise exception 'a conversation needs two different people';
+  end if;
+
+  -- Canonical order, so the pair is unique.
+  if v_me < p_other then v_low := v_me;  v_high := p_other;
+  else                   v_low := p_other; v_high := v_me;
+  end if;
+
+  select id into v_id
+    from public.conversations
+   where user_a = v_low and user_b = v_high;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  -- Blocked either way? No new conversation.
+  if exists (
+    select 1 from public.blocks
+     where (blocker_id = v_me and blocked_id = p_other)
+        or (blocker_id = p_other and blocked_id = v_me)
+  ) then
+    raise exception 'you cannot message this account';
+  end if;
+
+  insert into public.conversations (user_a, user_b)
+       values (v_low, v_high)
+    returning id into v_id;
+
+  insert into public.conversation_participants (conversation_id, user_id)
+       values (v_id, v_low), (v_id, v_high)
+  on conflict do nothing;
+
+  return v_id;
+end;
+$$;
+
+-- Keeps the denormalised preview in step with the newest message. Security
+-- definer, because a sender has no update rights on the conversation row.
+create or replace function public.messages_touch_conversation()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.conversations
+     set last_message_body = new.body,
+         last_message_at   = new.created_at,
+         last_sender_id    = new.sender_id
+   where id = new.conversation_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_messages_touch_conversation on public.messages;
+create trigger trg_messages_touch_conversation
+  after insert on public.messages
+  for each row execute function public.messages_touch_conversation();
+
+-- Only the two people in a conversation can see it. A plain column test (no
+-- subquery), so it cannot recurse.
+drop policy if exists conversations_select on public.conversations;
+create policy conversations_select on public.conversations
+  for select using (auth.uid() in (user_a, user_b));
+
+-- Participant rows (read receipts) follow their conversation. The lookup is on
+-- a *different* table, so this cannot recurse either.
+drop policy if exists conversation_participants_select on public.conversation_participants;
+create policy conversation_participants_select on public.conversation_participants
+  for select using (
+    exists (select 1 from public.conversations c where c.id = conversation_id)
+  );
+drop policy if exists conversation_participants_update_own on public.conversation_participants;
+create policy conversation_participants_update_own on public.conversation_participants
+  for update using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists messages_select on public.messages;
+create policy messages_select on public.messages
+  for select using (
+    exists (select 1 from public.conversations c where c.id = conversation_id)
+  );
+-- You may only send as yourself, into a conversation you are part of.
+drop policy if exists messages_insert_own on public.messages;
+create policy messages_insert_own on public.messages
+  for insert with check (
+    sender_id = auth.uid()
+    and exists (
+      select 1 from public.conversations c
+       where c.id = conversation_id and auth.uid() in (c.user_a, c.user_b)
+    )
+  );
+
+-- Live inbox and live chat. Realtime only delivers tables in this publication,
+-- and membership is checked first so re-running this block is harmless.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public'
+       and tablename = 'conversations'
+  ) then
+    alter publication supabase_realtime add table public.conversations;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public'
+       and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table public.messages;
+  end if;
+end $$;
 
 -- Check: every table listed here should show true.
 select tablename, rowsecurity from pg_tables where schemaname = 'public' order by tablename;

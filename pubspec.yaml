@@ -61,7 +61,15 @@ flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
-  uses-material-design: false
+  #
+  # Kept `true` even though lib/ never imports package:flutter/material.dart:
+  # on Android, adaptive_platform_ui renders a MaterialApp/Material AppBar
+  # (only iOS <26/26+ use the Cupertino/native bars), and the AppBar's
+  # automatic back button is Material's Icons.arrow_back. With this `false`
+  # the MaterialIcons font is not bundled and that back arrow draws as an
+  # empty glyph on Android. Bundling the font does not pull Material into
+  # lib/ — the "no material.dart imports" rule still holds.
+  uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
   # assets:

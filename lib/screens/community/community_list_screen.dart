@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/messages.dart';
@@ -112,13 +113,13 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
         actions: [
           AdaptiveAppBarAction(
             iosSymbol: 'plus',
-            icon: CupertinoIcons.add,
+            icon: AppIcons.add,
             onPressed: _create,
           ),
         ],
       ),
       body: communities.when<Widget>(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (all) {
           final query = _search.text.trim().toLowerCase();
@@ -128,13 +129,13 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
                   community.name.toLowerCase().contains(query) ||
                   community.slug.toLowerCase().contains(query))
               .toList();
-          return CustomScrollView(
+          return AppRefreshView(
+            onRefresh: _refresh,
             slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _refresh),
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: CupertinoSearchTextField(
+                  child: AppSearchField(
                     controller: _search,
                     placeholder: 'Search communities',
                     onChanged: (_) => setState(() {}),
@@ -142,7 +143,7 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
                 ),
               ),
               if (shown.isEmpty)
-                const SliverFillRemaining(
+                SliverFillRemaining(
                   hasScrollBody: false,
                   child: Center(
                     child: Padding(
@@ -150,7 +151,7 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
                       child: Text(
                         'No communities yet. Tap + to start one.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: CupertinoColors.secondaryLabel),
+                        style: TextStyle(color: context.colors.secondaryLabel),
                       ),
                     ),
                   ),
@@ -194,10 +195,10 @@ class _CommunityRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            const Icon(
-              CupertinoIcons.person_2_fill,
+            Icon(
+              AppIcons.person_2_fill,
               size: 30,
-              color: CupertinoColors.systemGrey,
+              color: context.colors.systemGrey,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -216,10 +217,10 @@ class _CommunityRow extends StatelessWidget {
                       ),
                       if (community.isPrivate) ...[
                         const SizedBox(width: 6),
-                        const Icon(
-                          CupertinoIcons.lock_fill,
+                        Icon(
+                          AppIcons.lock_fill,
                           size: 12,
-                          color: CupertinoColors.secondaryLabel,
+                          color: context.colors.secondaryLabel,
                         ),
                       ],
                     ],
@@ -227,9 +228,9 @@ class _CommunityRow extends StatelessWidget {
                   Text(
                     '${compactCount(community.memberCount)} member'
                     '${community.memberCount == 1 ? '' : 's'} · threads/${community.slug}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: CupertinoColors.secondaryLabel,
+                      color: context.colors.secondaryLabel,
                     ),
                   ),
                   if (community.description.isNotEmpty)

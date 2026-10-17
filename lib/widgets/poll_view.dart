@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/models/poll.dart';
 
@@ -32,7 +33,7 @@ class PollView extends StatelessWidget {
           ),
         Text(
           '${compactCount(total)} votes · ${poll.isOpen ? _timeLeft() : 'Final results'}',
-          style: const TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+          style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
         ),
       ],
     );
@@ -66,7 +67,7 @@ class _OptionBar extends StatelessWidget {
         height: 44,
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? CupertinoColors.activeBlue : CupertinoColors.separator,
+            color: selected ? context.colors.activeBlue : context.colors.separator,
           ),
           borderRadius: BorderRadius.circular(10),
         ),
@@ -76,7 +77,7 @@ class _OptionBar extends StatelessWidget {
               FractionallySizedBox(
                 widthFactor: share.clamp(0.0, 1.0).toDouble(),
                 heightFactor: 1,
-                child: Container(color: CupertinoColors.systemGrey5),
+                child: Container(color: context.colors.systemGrey5),
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -87,7 +88,7 @@ class _OptionBar extends StatelessWidget {
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, color: CupertinoColors.label),
+                      style: TextStyle(fontSize: 15, color: context.colors.label),
                     ),
                   ),
                   if (showResults)

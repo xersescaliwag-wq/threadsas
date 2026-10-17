@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/config.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/messages.dart';
@@ -125,10 +126,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       padding: const EdgeInsets.only(top: 16, bottom: 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: CupertinoColors.secondaryLabel,
+          color: context.colors.secondaryLabel,
         ),
       ),
     );
@@ -160,9 +161,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     children: [
                       _photo(),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Change photo',
-                        style: TextStyle(color: CupertinoColors.activeBlue),
+                        style: TextStyle(color: context.colors.activeBlue),
                       ),
                     ],
                   ),
@@ -196,7 +197,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 alignment: Alignment.centerRight,
                 child: Text(
                   '${_bio.text.length}/$maxBioLength',
-                  style: const TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+                  style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
                 ),
               ),
               _label('Website'),
@@ -210,7 +211,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -218,22 +219,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         SizedBox(height: 2),
                         Text(
                           'New followers need your approval. People who already follow you stay.',
-                          style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+                          style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 12),
-                  CupertinoSwitch(
+                  AdaptiveSwitch(
                     value: _isPrivate,
                     onChanged: _busy ? null : (value) => setState(() => _isPrivate = value),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              CupertinoButton.filled(
+              AdaptiveButton.child(
                 onPressed: _busy ? null : _save,
-                child: _busy ? const CupertinoActivityIndicator() : const Text('Save'),
+                child: _busy ? const AppSpinner() : const Text('Save'),
               ),
             ],
           ),

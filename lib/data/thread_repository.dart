@@ -12,7 +12,10 @@ class ThreadRepository {
   static const _threadSelect =
       '*, '
       'author:profiles!threads_author_id_fkey(id, username, display_name, bio, avatar_url, is_private, is_verified), '
-      'quoted:threads!threads_quote_id_fkey(*, author:profiles!threads_author_id_fkey(id, username, display_name, avatar_url, is_private, is_verified)), '
+      // The quote embed is threads -> threads (self-referential). PostgREST only
+      // resolves the hint by the foreign-key *column* here; its suggested
+      // constraint-name hint ('threads_quote_id_fkey') fails with PGRST200.
+      'quoted:threads!quote_id(*, author:profiles!threads_author_id_fkey(id, username, display_name, avatar_url, is_private, is_verified)), '
       'poll:polls(ends_at), '
       'poll_options(id, label, position, votes_count)';
   // ---------- Feeds ----------
@@ -221,24 +224,30 @@ class ThreadRepository {
   Future<void> deleteThread(String threadId) async {
     await _client.from('threads').delete().eq('id', threadId);
   }
+  /// Reacting writes the row only when it is not there yet. Every list holds its
+  /// own copy of a post, so the user may tap a heart that already has a like
+  /// behind it; that must succeed quietly instead of failing on the key.
   Future<void> like(String threadId) async {
-    await _client.from('likes').insert({'thread_id': threadId, 'user_id': _me});
+    await _client
+        .from('likes')
+        .upsert({'thread_id': threadId, 'user_id': _me}, ignoreDuplicates: true);
   }
   Future<void> unlike(String threadId) async {
     await _client.from('likes').delete().eq('thread_id', threadId).eq('user_id', _me);
   }
   Future<void> repost(String threadId) async {
-    await _client.from('reposts').insert({'thread_id': threadId, 'user_id': _me});
+    await _client
+        .from('reposts')
+        .upsert({'thread_id': threadId, 'user_id': _me}, ignoreDuplicates: true);
   }
   Future<void> undoRepost(String threadId) async {
     await _client.from('reposts').delete().eq('thread_id', threadId).eq('user_id', _me);
   }
   Future<void> votePoll(String threadId, String optionId) async {
-    await _client.from('poll_votes').insert({
-      'thread_id': threadId,
-      'option_id': optionId,
-      'user_id': _me,
-    });
+    await _client.from('poll_votes').upsert(
+          {'thread_id': threadId, 'option_id': optionId, 'user_id': _me},
+          ignoreDuplicates: true,
+        );
   }
   // ---------- Search ----------
   /// Full-text search. The search_threads function returns matching ids, then the normal select runs, so visibility rules still apply.

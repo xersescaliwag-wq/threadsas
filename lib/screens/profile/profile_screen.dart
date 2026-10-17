@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/messages.dart';
@@ -12,8 +13,10 @@ import 'package:threads/models/profile.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
 import 'package:threads/providers/feed_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/providers/thread_providers.dart';
+import 'package:threads/screens/messages/chat_screen.dart';
 import 'package:threads/screens/profile/edit_profile_screen.dart';
 import 'package:threads/screens/profile/follow_list_screen.dart';
 import 'package:threads/widgets/avatar.dart';
@@ -54,6 +57,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _edits.clear();
       _endReached = false;
     });
+    // The rows coming back are the server's truth, so shared copies are out of date.
+    ref.read(postStateProvider.notifier).clear();
     ref.invalidate(profileByIdProvider(widget.userId));
     ref.invalidate(followStateProvider(widget.userId));
     ref.invalidate(pinnedThreadProvider(widget.userId));
@@ -100,11 +105,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         await social.unfollow(profile.id);
       }
       ref.invalidate(followStateProvider(profile.id));
+      // Their follower count and follower list changed.
       ref.invalidate(profileByIdProvider(profile.id));
+      ref.invalidate(followersProvider(profile.id));
+      // My following count and following list changed too. My own profile
+      // stays mounted in the main shell, so it has to be told to reload its
+      // counts or the number on screen stays stale.
+      final me = ref.read(currentUserIdProvider);
+      if (me != null) {
+        ref.invalidate(profileByIdProvider(me));
+        ref.invalidate(followingListProvider(me));
+      }
       ref.invalidate(followingFeedProvider);
     } catch (error) {
       if (mounted) await showError(context, error);
     }
+  }
+  void _message(Profile profile) {
+    openScreen<void>(context, ChatScreen(other: profile));
   }
   Future<void> _editProfile(Profile profile) async {
     final saved = await openScreen<bool>(context, EditProfileScreen(profile: profile));
@@ -124,7 +142,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final profileAsync = ref.watch(profileByIdProvider(widget.userId));
     final me = ref.watch(currentUserIdProvider);
     final body = profileAsync.when<Widget>(
-      loading: () => const Center(child: CupertinoActivityIndicator()),
+      loading: () => const Center(child: AppSpinner()),
       error: (error, _) => Center(child: Text(friendlyError(error))),
       data: (profile) {
         if (profile == null) {
@@ -144,26 +162,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ? FollowState.following
         : (ref.watch(followStateProvider(profile.id)).value ?? FollowState.none);
     final locked = profile.isPrivate && !isMine && followState != FollowState.following;
-    return CustomScrollView(
+    return AppRefreshView(
+      onRefresh: _refresh,
       slivers: [
-        CupertinoSliverRefreshControl(onRefresh: _refresh),
         SliverToBoxAdapter(
           child: _header(profile, isMine: isMine, followState: followState),
         ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: CupertinoSlidingSegmentedControl<int>(
-              groupValue: _tab,
-              children: const {0: Text('Threads'), 1: Text('Replies'), 2: Text('Reposts')},
-              onValueChanged: (value) {
-                if (value != null) _selectTab(value);
-              },
+            child: AdaptiveSegmentedControl(
+              labels: const ['Threads', 'Replies', 'Reposts'],
+              selectedIndex: _tab,
+              onValueChanged: _selectTab,
             ),
           ),
         ),
         if (locked)
-          const SliverFillRemaining(
+          SliverFillRemaining(
             hasScrollBody: false,
             child: Center(
               child: Padding(
@@ -171,7 +187,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Text(
                   'This account is private. Follow it to see its posts.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                  style: TextStyle(color: context.colors.secondaryLabel),
                 ),
               ),
             ),
@@ -206,10 +222,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                         if (profile.isVerified) ...[
                           const SizedBox(width: 6),
-                          const Icon(
-                            CupertinoIcons.checkmark_seal_fill,
+                          Icon(
+                            AppIcons.checkmark_seal_fill,
                             size: 18,
-                            color: CupertinoColors.activeBlue,
+                            color: context.colors.activeBlue,
                           ),
                         ],
                       ],
@@ -217,7 +233,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '@${profile.username}',
-                      style: const TextStyle(fontSize: 15, color: CupertinoColors.secondaryLabel),
+                      style: TextStyle(fontSize: 15, color: context.colors.secondaryLabel),
                     ),
                   ],
                 ),
@@ -235,14 +251,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               onTap: () => _openWebsite(website),
               child: Row(
                 children: [
-                  const Icon(CupertinoIcons.link, size: 15, color: CupertinoColors.activeBlue),
+                  Icon(AppIcons.link, size: 15, color: context.colors.activeBlue),
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
                       website,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, color: CupertinoColors.activeBlue),
+                      style: TextStyle(fontSize: 15, color: context.colors.activeBlue),
                     ),
                   ),
                 ],
@@ -276,15 +292,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: AdaptiveButton.child(
-              onPressed: isMine
-                  ? () => _editProfile(profile)
-                  : () => _toggleFollow(profile, followState),
-              child: Text(isMine ? 'Edit profile' : _followLabel(followState)),
+          if (isMine)
+            SizedBox(
+              width: double.infinity,
+              child: AdaptiveButton.child(
+                onPressed: () => _editProfile(profile),
+                child: const Text('Edit profile'),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: AdaptiveButton.child(
+                    onPressed: () => _toggleFollow(profile, followState),
+                    child: Text(_followLabel(followState)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AdaptiveButton.child(
+                    style: AdaptiveButtonStyle.tinted,
+                    onPressed: () => _message(profile),
+                    child: const Text('Message'),
+                  ),
+                ),
+              ],
             ),
-          ),
         ],
       ),
     );
@@ -296,7 +330,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       loading: () => const [
         SliverFillRemaining(
           hasScrollBody: false,
-          child: Center(child: CupertinoActivityIndicator()),
+          child: Center(child: AppSpinner()),
         ),
       ],
       error: (error, _) => [
@@ -313,12 +347,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ];
         if (rows.isEmpty) {
           rows.add(
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(32),
               child: Center(
                 child: Text(
                   'Nothing here yet.',
-                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                  style: TextStyle(color: context.colors.secondaryLabel),
                 ),
               ),
             ),
@@ -341,7 +375,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Container(
           height: 0.5,
           margin: const EdgeInsets.only(left: 68),
-          color: CupertinoColors.separator,
+          color: context.colors.separator,
         ),
       ],
     );
@@ -351,8 +385,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       padding: const EdgeInsets.all(16),
       child: Center(
         child: _loadingMore
-            ? const CupertinoActivityIndicator()
-            : CupertinoButton(
+            ? const AppSpinner()
+            : AdaptiveButton.child(
                 onPressed: () => _loadMore(shown),
                 child: const Text('Load more'),
               ),

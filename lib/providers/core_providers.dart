@@ -4,8 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:threads/data/auth_repository.dart';
 import 'package:threads/data/community_repository.dart';
 import 'package:threads/data/gif_repository.dart';
+import 'package:threads/data/instagram_repository.dart';
 import 'package:threads/data/link_preview_repository.dart';
 import 'package:threads/data/media_repository.dart';
+import 'package:threads/data/message_repository.dart';
 import 'package:threads/data/notification_repository.dart';
 import 'package:threads/data/profile_repository.dart';
 import 'package:threads/data/social_repository.dart';
@@ -30,6 +32,9 @@ final notificationRepositoryProvider = Provider<NotificationRepository>(
 final mediaRepositoryProvider = Provider<MediaRepository>(
   (ref) => MediaRepository(ref.watch(supabaseClientProvider)),
 );
+final messageRepositoryProvider = Provider<MessageRepository>(
+  (ref) => MessageRepository(ref.watch(supabaseClientProvider)),
+);
 final linkPreviewRepositoryProvider = Provider<LinkPreviewRepository>(
   (ref) => LinkPreviewRepository(ref.watch(supabaseClientProvider)),
 );
@@ -38,6 +43,9 @@ final gifRepositoryProvider = Provider<GifRepository>(
 );
 final communityRepositoryProvider = Provider<CommunityRepository>(
   (ref) => CommunityRepository(ref.watch(supabaseClientProvider)),
+);
+final instagramRepositoryProvider = Provider<InstagramRepository>(
+  (ref) => InstagramRepository(ref.watch(supabaseClientProvider)),
 );
 /// Emits on every sign-in, sign-out and token refresh.
 final authStateProvider = StreamProvider<AuthState>(

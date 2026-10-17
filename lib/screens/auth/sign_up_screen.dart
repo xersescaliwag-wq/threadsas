@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/providers/core_providers.dart';
@@ -90,11 +91,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               autocorrect: false,
               textInputAction: TextInputAction.next,
             ),
-            const Padding(
+            Padding(
               padding: EdgeInsets.only(top: 6, bottom: 12),
               child: Text(
                 '3 to 30 letters, numbers, periods or underscores.',
-                style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+                style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
               ),
             ),
             AdaptiveTextField(
@@ -116,7 +117,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             AdaptiveButton.child(
               onPressed: _signUp,
               child: _busy
-                  ? const CupertinoActivityIndicator()
+                  ? const AppSpinner()
                   : const Text('Create account'),
             ),
           ],

@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/widgets/avatar.dart';
 
@@ -16,7 +17,7 @@ class QuoteCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: CupertinoColors.separator),
+          border: Border.all(color: context.colors.separator),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -37,7 +38,7 @@ class QuoteCard extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   '@${post.author.username}',
-                  style: const TextStyle(fontSize: 14, color: CupertinoColors.secondaryLabel),
+                  style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
                 ),
               ],
             ),

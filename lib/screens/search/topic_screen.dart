@@ -3,10 +3,12 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/providers/thread_providers.dart';
 import 'package:threads/widgets/thread_card.dart';
@@ -32,6 +34,8 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
       _edits.clear();
       _endReached = false;
     });
+    // The rows coming back are the server's truth, so shared copies are out of date.
+    ref.read(postStateProvider.notifier).clear();
     ref.invalidate(topicProvider(widget.tag));
     await ref.read(topicProvider(widget.tag).future);
   }
@@ -62,7 +66,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: '#${widget.tag}'),
       body: first.when<Widget>(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (page) {
           final all = [...page, ..._more];
@@ -70,9 +74,9 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
               .where((post) => !muted.contains(post.author.id) && !_gone.contains(post.id))
               .toList();
           final hasMore = !_endReached && page.length >= _pageSize;
-          return CustomScrollView(
+          return AppRefreshView(
+            onRefresh: _refresh,
             slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _refresh),
               if (posts.isEmpty)
                 SliverFillRemaining(
                   hasScrollBody: false,
@@ -82,7 +86,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                       child: Text(
                         'No threads use #${widget.tag} yet.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: CupertinoColors.secondaryLabel),
+                        style: TextStyle(color: context.colors.secondaryLabel),
                       ),
                     ),
                   ),
@@ -99,7 +103,7 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                             onChanged: _changed,
                             onDeleted: () => setState(() => _gone.add(post.id)),
                           ),
-                          Container(height: 0.5, margin: const EdgeInsets.only(left: 68), color: CupertinoColors.separator),
+                          Container(height: 0.5, margin: const EdgeInsets.only(left: 68), color: context.colors.separator),
                         ],
                       ),
                     if (hasMore)
@@ -107,8 +111,8 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
                         padding: const EdgeInsets.all(16),
                         child: Center(
                           child: _loadingMore
-                              ? const CupertinoActivityIndicator()
-                              : CupertinoButton(
+                              ? const AppSpinner()
+                              : AdaptiveButton.child(
                                   onPressed: () => _loadMore(all),
                                   child: const Text('Load more'),
                                 ),

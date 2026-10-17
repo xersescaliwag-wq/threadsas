@@ -1,12 +1,15 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/models/poll.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/screens/profile/profile_screen.dart';
 import 'package:threads/screens/search/topic_screen.dart';
 import 'package:threads/screens/thread/thread_detail_screen.dart';
@@ -52,16 +55,23 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
     if (!identical(oldWidget.post, widget.post)) _post = widget.post;
   }
 
-  /// Shows a change at once, then tells the parent.
+  /// Shows a change at once, then tells the parent. The shared state carries the
+  /// change to every other list that holds the same post, so a like made here is
+  /// not missing from the feed or the author's profile.
   void _update(ThreadPost updated) {
     setState(() => _post = updated);
+    ref.read(postStateProvider.notifier).apply(updated);
     widget.onChanged(updated);
   }
 
+  /// The newest copy of this post: a change made on another screen wins over the
+  /// copy this card was built with.
+  ThreadPost get _latest => ref.read(postStateProvider)[widget.post.id] ?? _post;
+
   Future<void> _vote(String optionId) async {
-    final poll = _post.poll;
+    final before = _latest;
+    final poll = before.poll;
     if (poll == null || poll.hasVoted || !poll.isOpen) return;
-    final before = _post;
     final options = [
       for (final option in poll.options)
         if (option.id == optionId)
@@ -74,9 +84,9 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
         else
           option,
     ];
-    _update(_post.copyWith(poll: poll.copyWith(options: options, myOptionId: optionId)));
+    _update(before.copyWith(poll: poll.copyWith(options: options, myOptionId: optionId)));
     try {
-      await ref.read(threadRepositoryProvider).votePoll(_post.id, optionId);
+      await ref.read(threadRepositoryProvider).votePoll(before.id, optionId);
     } catch (error) {
       if (!mounted) return;
       _update(before); // roll back the optimistic vote
@@ -112,11 +122,11 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Icon(icon, size: 13, color: CupertinoColors.secondaryLabel),
+          Icon(icon, size: 13, color: context.colors.secondaryLabel),
           const SizedBox(width: 4),
           Text(
             text,
-            style: const TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+            style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
           ),
         ],
       ),
@@ -125,7 +135,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
 
   @override
   Widget build(BuildContext context) {
-    final post = _post;
+    // Another screen may have liked or voted on this post after its list was
+    // fetched, and that newer copy wins over the one this card was built with.
+    final shared = ref.watch(postStateProvider.select((all) => all[widget.post.id]));
+    final post = shared ?? _post;
     final me = ref.watch(currentUserIdProvider);
     final isMine = post.author.id == me;
     final edited = post.editedAt == null ? '' : ' · Edited';
@@ -166,10 +179,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                               ),
                               if (post.author.isVerified) ...[
                                 const SizedBox(width: 4),
-                                const Icon(
-                                  CupertinoIcons.checkmark_seal_fill,
+                                Icon(
+                                  AppIcons.checkmark_seal_fill,
                                   size: 15,
-                                  color: CupertinoColors.activeBlue,
+                                  color: context.colors.activeBlue,
                                 ),
                               ],
                             ],
@@ -182,13 +195,13 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                           '@${post.author.username} · ${timeAgo(post.createdAt)}$edited',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14, color: CupertinoColors.secondaryLabel),
+                          style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
                         ),
                       ),
                       const Spacer(),
-                      CupertinoButton(
+                      AdaptiveButton.child(
                         padding: EdgeInsets.zero,
-                        minimumSize: const Size(28, 28),
+                        minSize: const Size(28, 28),
                         onPressed: () => showThreadMenu(
                           context,
                           ref: ref,
@@ -197,16 +210,16 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                           onChanged: _update,
                           onDeleted: widget.onDeleted,
                         ),
-                        child: const Icon(
-                          CupertinoIcons.ellipsis,
+                        child: Icon(
+                          AppIcons.ellipsis,
                           size: 20,
-                          color: CupertinoColors.secondaryLabel,
+                          color: context.colors.secondaryLabel,
                         ),
                       ),
                     ],
                   ),
-                  if (post.isPinned) _note(CupertinoIcons.pin_fill, 'Pinned'),
-                  if (expiryNote != null) _note(CupertinoIcons.clock, expiryNote),
+                  if (post.isPinned) _note(AppIcons.pin_fill, 'Pinned'),
+                  if (expiryNote != null) _note(AppIcons.clock, expiryNote),
                   if (post.content.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     RichContent(

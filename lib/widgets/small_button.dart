@@ -1,4 +1,5 @@
 // lib/widgets/small_button.dart
+import 'package:threads/core/adaptive.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 class SmallButton extends StatelessWidget {
@@ -20,7 +21,7 @@ class SmallButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
-            color: filled ? CupertinoColors.activeBlue : CupertinoColors.systemGrey5,
+            color: filled ? context.colors.activeBlue : context.colors.systemGrey5,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -28,7 +29,7 @@ class SmallButton extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: filled ? CupertinoColors.white : CupertinoColors.label,
+              color: filled ? context.colors.white : context.colors.label,
             ),
           ),
         ),

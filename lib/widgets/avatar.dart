@@ -1,3 +1,4 @@
+import 'package:threads/core/adaptive.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 
@@ -15,14 +16,14 @@ class Avatar extends StatelessWidget {
     final placeholder = Container(
       width: size,
       height: size,
-      color: CupertinoColors.systemGrey4,
+      color: context.colors.systemGrey4,
       alignment: Alignment.center,
       child: Text(
         initial,
         style: TextStyle(
           fontSize: size * 0.42,
           fontWeight: FontWeight.w600,
-          color: CupertinoColors.label,
+          color: context.colors.label,
         ),
       ),
     );

@@ -1,7 +1,9 @@
 // lib/widgets/thread_menu.dart
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/links.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/core/navigation.dart';
@@ -22,32 +24,38 @@ Future<void> showThreadMenu(
   required ValueChanged<ThreadPost> onChanged,
   VoidCallback? onDeleted,
 }) async {
-  final choice = await showCupertinoModalPopup<String>(
-    context: context,
-    builder: (sheetContext) => CupertinoActionSheet(
-      actions: [
-        if (isMine) ...[
-          _choice(sheetContext, 'edit', 'Edit'),
-          _choice(sheetContext, 'pin', post.isPinned ? 'Unpin from profile' : 'Pin to profile'),
-          _choice(
-            sheetContext,
-            'hide-likes',
-            post.hideLikeCount ? 'Show like count' : 'Hide like count',
-          ),
-          _choice(sheetContext, 'delete', 'Delete', destructive: true),
-        ] else ...[
-          _choice(sheetContext, 'mute', 'Mute @${post.author.username}'),
-          _choice(sheetContext, 'block', 'Block @${post.author.username}', destructive: true),
-          _choice(sheetContext, 'report', 'Report'),
-        ],
-        _choice(sheetContext, 'copy', 'Copy link'),
+  final choice = await showAppActionSheet<String>(
+    context,
+    items: [
+      if (isMine) ...[
+        const AppActionSheetItem(value: 'edit', label: 'Edit'),
+        AppActionSheetItem(
+          value: 'pin',
+          label: post.isPinned ? 'Unpin from profile' : 'Pin to profile',
+        ),
+        AppActionSheetItem(
+          value: 'hide-likes',
+          label: post.hideLikeCount ? 'Show like count' : 'Hide like count',
+        ),
+        const AppActionSheetItem(
+          value: 'delete',
+          label: 'Delete',
+          destructive: true,
+        ),
+      ] else ...[
+        AppActionSheetItem(
+          value: 'mute',
+          label: 'Mute @${post.author.username}',
+        ),
+        AppActionSheetItem(
+          value: 'block',
+          label: 'Block @${post.author.username}',
+          destructive: true,
+        ),
+        const AppActionSheetItem(value: 'report', label: 'Report'),
       ],
-      cancelButton: CupertinoActionSheetAction(
-        isDefaultAction: true,
-        onPressed: () => Navigator.of(sheetContext).pop(),
-        child: const Text('Cancel'),
-      ),
-    ),
+      const AppActionSheetItem(value: 'copy', label: 'Copy link'),
+    ],
   );
   if (choice == null || !context.mounted) return;
   if (choice == 'edit') {
@@ -67,19 +75,6 @@ Future<void> showThreadMenu(
   } else if (choice == 'copy') {
     await copyThreadLink(context, post);
   }
-}
-
-CupertinoActionSheetAction _choice(
-  BuildContext context,
-  String value,
-  String label, {
-  bool destructive = false,
-}) {
-  return CupertinoActionSheetAction(
-    isDestructiveAction: destructive,
-    onPressed: () => Navigator.of(context).pop(value),
-    child: Text(label),
-  );
 }
 
 /// Runs one task and shows any error in plain language.
@@ -147,9 +142,22 @@ Future<void> _confirmDelete(
   );
   if (!sure || !context.mounted) return;
   await _run(context, () async {
+    // Remove the Instagram copy first, while the link row still exists:
+    // deleting the thread removes it by cascade. Best effort only.
+    final note = await _removeInstagramCopy(ref, post.id);
     await ref.read(threadRepositoryProvider).deleteThread(post.id);
     onDeleted?.call();
+    if (note != null && context.mounted) {
+      await showMessage(context, 'Instagram copy', note);
+    }
   });
+}
+
+/// Removes a thread's Instagram copy when one was recorded. Returns a note to
+/// show the user, or null when there is nothing to say. It never throws, so a
+/// failure cannot stop the thread from being deleted.
+Future<String?> _removeInstagramCopy(WidgetRef ref, String threadId) {
+  return ref.read(instagramRepositoryProvider).deleteCopy(threadId);
 }
 
 Future<void> _mute(BuildContext context, WidgetRef ref, ThreadPost post) async {
@@ -174,6 +182,17 @@ Future<void> _confirmBlock(BuildContext context, WidgetRef ref, ThreadPost post)
     await ref.read(socialRepositoryProvider).block(post.author.id);
     ref.invalidate(followStateProvider(post.author.id));
     ref.invalidate(blockedProfilesProvider);
+    // Blocking deletes any follow in either direction, so both profiles' counts
+    // and lists move. Refresh mine as well or it stays stale.
+    ref.invalidate(profileByIdProvider(post.author.id));
+    final me = ref.read(currentUserIdProvider);
+    if (me != null) {
+      ref.invalidate(profileByIdProvider(me));
+      ref.invalidate(followersProvider(me));
+      ref.invalidate(followingListProvider(me));
+    }
+    ref.invalidate(followersProvider(post.author.id));
+    ref.invalidate(followingListProvider(post.author.id));
     _refreshFeeds(ref);
   });
 }
@@ -195,31 +214,24 @@ Future<void> _report(BuildContext context, WidgetRef ref, ThreadPost post) async
 
 /// A dialog with a text box. Returns the trimmed reason, or null when the person cancels.
 Future<String?> _askReason(BuildContext context) {
-  final controller = TextEditingController();
-  return showCupertinoDialog<String>(
+  return AdaptiveAlertDialog.inputShow(
     context: context,
-    builder: (dialogContext) => CupertinoAlertDialog(
-      title: const Text('Report this post'),
-      content: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: CupertinoTextField(
-          controller: controller,
-          placeholder: 'What is wrong with it?',
-          maxLines: 3,
-          maxLength: 500,
-        ),
+    title: 'Report this post',
+    actions: [
+      AlertAction(
+        title: 'Cancel',
+        style: AlertActionStyle.cancel,
+        onPressed: () {},
       ),
-      actions: [
-        CupertinoDialogAction(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        CupertinoDialogAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(dialogContext).pop(controller.text.trim()),
-          child: const Text('Send'),
-        ),
-      ],
+      AlertAction(
+        title: 'Send',
+        style: AlertActionStyle.primary,
+        onPressed: () {},
+      ),
+    ],
+    input: const AdaptiveAlertDialogInput(
+      placeholder: 'What is wrong with it?',
+      maxLength: 500,
     ),
-  ).whenComplete(controller.dispose);
+  );
 }

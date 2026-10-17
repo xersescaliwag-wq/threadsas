@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/data/gif_repository.dart';
 import 'package:threads/models/gif_result.dart';
 import 'package:threads/providers/core_providers.dart';
@@ -82,7 +83,7 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              child: CupertinoSearchTextField(
+              child: AppSearchField(
                 controller: _controller,
                 placeholder: 'Search GIFs',
                 onChanged: _onChanged,
@@ -105,19 +106,19 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
           child: Text(
             error,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: CupertinoColors.secondaryLabel),
+            style: TextStyle(color: context.colors.secondaryLabel),
           ),
         ),
       );
     }
     if (_loading && _results.isEmpty) {
-      return const Center(child: CupertinoActivityIndicator());
+      return const Center(child: AppSpinner());
     }
     if (_results.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No GIFs found',
-          style: TextStyle(color: CupertinoColors.secondaryLabel),
+          style: TextStyle(color: context.colors.secondaryLabel),
         ),
       );
     }
@@ -139,7 +140,7 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
               gif.previewUrl,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) =>
-                  const ColoredBox(color: CupertinoColors.systemGrey5),
+                  ColoredBox(color: context.colors.systemGrey5),
             ),
           ),
         );

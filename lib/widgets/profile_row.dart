@@ -1,6 +1,7 @@
 // lib/widgets/profile_row.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/models/profile.dart';
 import 'package:threads/screens/profile/profile_screen.dart';
@@ -38,13 +39,13 @@ class ProfileRow extends StatelessWidget {
                       ),
                       if (profile.isVerified) ...[
                         const SizedBox(width: 4),
-                        const Icon(CupertinoIcons.checkmark_seal_fill, size: 14, color: CupertinoColors.activeBlue),
+                        Icon(AppIcons.checkmark_seal_fill, size: 14, color: context.colors.activeBlue),
                       ],
                     ],
                   ),
                   Text(
                     '@${profile.username}',
-                    style: const TextStyle(fontSize: 14, color: CupertinoColors.secondaryLabel),
+                    style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
                   ),
                   if (profile.bio.isNotEmpty)
                     Text(profile.bio, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),

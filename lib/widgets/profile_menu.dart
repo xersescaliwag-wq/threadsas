@@ -2,6 +2,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/models/profile.dart';
 import 'package:threads/providers/core_providers.dart';
@@ -19,20 +20,25 @@ Future<void> showProfileMenu(
     isMuted = (await ref.read(mutedIdsProvider.future)).contains(profile.id);
   } catch (_) {}
   if (!context.mounted) return;
-  final choice = await showCupertinoModalPopup<String>(
-    context: context,
-    builder: (sheetContext) => CupertinoActionSheet(
-      actions: [
-        _action(sheetContext, 'mute', isMuted ? 'Unmute @${profile.username}' : 'Mute @${profile.username}'),
-        _action(sheetContext, 'block', 'Block @${profile.username}', destructive: true),
-        _action(sheetContext, 'report', 'Report @${profile.username}'),
-      ],
-      cancelButton: CupertinoActionSheetAction(
-        isDefaultAction: true,
-        onPressed: () => Navigator.of(sheetContext).pop(),
-        child: const Text('Cancel'),
+  final choice = await showAppActionSheet<String>(
+    context,
+    items: [
+      AppActionSheetItem(
+        value: 'mute',
+        label: isMuted
+            ? 'Unmute @${profile.username}'
+            : 'Mute @${profile.username}',
       ),
-    ),
+      AppActionSheetItem(
+        value: 'block',
+        label: 'Block @${profile.username}',
+        destructive: true,
+      ),
+      AppActionSheetItem(
+        value: 'report',
+        label: 'Report @${profile.username}',
+      ),
+    ],
   );
   if (choice == null || !context.mounted) return;
   if (choice == 'mute') {
@@ -43,18 +49,7 @@ Future<void> showProfileMenu(
     await _report(context, ref, profile);
   }
 }
-CupertinoActionSheetAction _action(
-  BuildContext context,
-  String value,
-  String label, {
-  bool destructive = false,
-}) {
-  return CupertinoActionSheetAction(
-    isDestructiveAction: destructive,
-    onPressed: () => Navigator.of(context).pop(value),
-    child: Text(label),
-  );
-}
+
 /// Runs one task and shows any error in plain language.
 Future<void> _run(BuildContext context, Future<void> Function() task) async {
   try {
@@ -105,6 +100,16 @@ Future<void> _confirmBlock(BuildContext context, WidgetRef ref, Profile profile)
     ref.invalidate(followStateProvider(profile.id));
     ref.invalidate(profileByIdProvider(profile.id));
     ref.invalidate(blockedProfilesProvider);
+    // Blocking deletes any follow in either direction, so both profiles' counts
+    // and lists move. Refresh mine as well or it stays stale.
+    final me = ref.read(currentUserIdProvider);
+    if (me != null) {
+      ref.invalidate(profileByIdProvider(me));
+      ref.invalidate(followersProvider(me));
+      ref.invalidate(followingListProvider(me));
+    }
+    ref.invalidate(followersProvider(profile.id));
+    ref.invalidate(followingListProvider(profile.id));
     _refreshFeeds(ref);
     if (context.mounted) Navigator.of(context).pop();
   });

@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/messages.dart';
 
 import 'package:threads/providers/core_providers.dart';
@@ -98,24 +99,24 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            const Text('Name', style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel)),
+            Text('Name', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
             const SizedBox(height: 6),
-            CupertinoTextField(
+            AdaptiveTextField(
               controller: _name,
               placeholder: 'Photography',
               maxLength: 60,
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            const Text('Link', style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel)),
+            Text('Link', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
             const SizedBox(height: 6),
-            CupertinoTextField(
+            AdaptiveTextField(
               controller: _slug,
               placeholder: 'photography',
               maxLength: 30,
-              prefix: const Padding(
+              prefix: Padding(
                 padding: EdgeInsets.only(left: 10),
-                child: Text('threads/', style: TextStyle(color: CupertinoColors.secondaryLabel)),
+                child: Text('threads/', style: TextStyle(color: context.colors.secondaryLabel)),
               ),
               onChanged: (value) {
                 _slugEdited = value.trim().isNotEmpty;
@@ -123,9 +124,9 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
               },
             ),
             const SizedBox(height: 12),
-            const Text('Description', style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel)),
+            Text('Description', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
             const SizedBox(height: 6),
-            CupertinoTextField(
+            AdaptiveTextField(
               controller: _description,
               placeholder: 'What is this community about?',
               minLines: 3,
@@ -136,29 +137,29 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
             const SizedBox(height: 4),
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Private community', style: TextStyle(fontSize: 16)),
                       Text(
                         'Only members can see the community and its posts.',
-                        style: TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+                        style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
                       ),
                     ],
                   ),
                 ),
-                CupertinoSwitch(
+                AdaptiveSwitch(
                   value: _private,
                   onChanged: (value) => setState(() => _private = value),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            CupertinoButton.filled(
+            AdaptiveButton.child(
               onPressed: _busy ? null : _create,
               child: _busy
-                  ? const CupertinoActivityIndicator()
+                  ? const AppSpinner()
                   : const Text('Create community'),
             ),
           ],

@@ -1,3 +1,4 @@
+import 'package:threads/core/adaptive.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -23,8 +24,8 @@ class RichContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final baseStyle = style ??
-        const TextStyle(fontSize: 16, height: 1.35, color: CupertinoColors.label);
-    final linkStyle = baseStyle.copyWith(color: CupertinoColors.activeBlue);
+        TextStyle(fontSize: 16, height: 1.35, color: context.colors.label);
+    final linkStyle = baseStyle.copyWith(color: context.colors.activeBlue);
     final spans = <InlineSpan>[];
     var cursor = 0;
     for (final match in _token.allMatches(text)) {

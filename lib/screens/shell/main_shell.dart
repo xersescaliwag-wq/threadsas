@@ -3,13 +3,16 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/providers/core_providers.dart';
 import 'package:threads/providers/notification_providers.dart';
 import 'package:threads/screens/activity/activity_screen.dart';
 import 'package:threads/screens/community/community_list_screen.dart';
 import 'package:threads/screens/compose/compose_screen.dart';
+import 'package:threads/screens/home/feeds_drawer.dart';
 import 'package:threads/screens/home/home_screen.dart';
+import 'package:threads/screens/messages/messages_screen.dart';
 import 'package:threads/screens/profile/profile_screen.dart';
 import 'package:threads/screens/search/search_screen.dart';
 import 'package:threads/screens/settings/settings_screen.dart';
@@ -27,7 +30,7 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   int _tab = _homeTab;
-  static const _titles = ['Threads', 'Search', '', 'Activity', 'Profile'];
+  static const _titles = ['Threads', 'Messages', '', 'Activity', 'Profile'];
 
   void _onTap(int index) {
     if (index == _composeTab) {
@@ -41,8 +44,13 @@ class _MainShellState extends ConsumerState<MainShell> {
     if (_tab == _homeTab) {
       return [
         AdaptiveAppBarAction(
+          iosSymbol: 'magnifyingglass',
+          icon: AppIcons.search,
+          onPressed: () => openScreen<void>(context, const _SearchPage()),
+        ),
+        AdaptiveAppBarAction(
           iosSymbol: 'person.2.fill',
-          icon: CupertinoIcons.person_2_fill,
+          icon: AppIcons.person_2_fill,
           onPressed: () =>
               openScreen<void>(context, const CommunityListScreen()),
         ),
@@ -52,7 +60,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     return [
       AdaptiveAppBarAction(
         iosSymbol: 'gearshape',
-        icon: CupertinoIcons.settings,
+        icon: AppIcons.settings,
         onPressed: () => openScreen<void>(context, const SettingsScreen()),
       ),
     ];
@@ -67,36 +75,64 @@ class _MainShellState extends ConsumerState<MainShell> {
     });
     final unread = ref.watch(unreadCountProvider).value ?? 0;
     final me = ref.watch(currentUserIdProvider) ?? '';
+    // The tab icon must match the bar that will draw it. The iOS 26+ native tab
+    // bar reads an SF Symbol *string*; the older Cupertino bar and the Android
+    // Material bar need an IconData (a string there becomes a plain circle, and
+    // the string is only mapped for a few symbols). So use the SF Symbol name
+    // only where the native bar consumes it.
+    final sfSymbols = PlatformInfo.isIOS26OrHigher();
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(
-        title: _titles[_tab],
-        actions: _actions(),
-      ),
+      appBar: _tab == _homeTab
+          ? null
+          : AdaptiveAppBar(title: _titles[_tab], actions: _actions()),
+      drawer: const FeedsDrawer(),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
         selectedIndex: _tab,
         onTap: _onTap,
         items: [
-          const AdaptiveNavigationDestination(icon: 'house.fill', label: 'Home'),
-          const AdaptiveNavigationDestination(icon: 'magnifyingglass', label: 'Search'),
-          const AdaptiveNavigationDestination(icon: 'square.and.pencil', label: 'Post'),
           AdaptiveNavigationDestination(
-            icon: 'heart.fill',
+            icon: sfSymbols ? 'house.fill' : AppIcons.house_fill,
+            label: 'Home',
+          ),
+          AdaptiveNavigationDestination(
+            icon: sfSymbols ? 'paperplane' : AppIcons.paperplane,
+            label: 'Messages',
+          ),
+          AdaptiveNavigationDestination(
+            icon: sfSymbols ? 'square.and.pencil' : AppIcons.square_pencil,
+            label: 'Post',
+          ),
+          AdaptiveNavigationDestination(
+            icon: sfSymbols ? 'heart.fill' : AppIcons.heart_fill,
             label: 'Activity',
             badgeCount: unread > 0 ? unread : null,
           ),
-          const AdaptiveNavigationDestination(icon: 'person.fill', label: 'Profile'),
+          AdaptiveNavigationDestination(
+            icon: sfSymbols ? 'person.fill' : AppIcons.person_fill,
+            label: 'Profile',
+          ),
         ],
       ),
       body: IndexedStack(
         index: _tab,
         children: [
           const HomeScreen(),
-          const SearchScreen(),
+          const MessagesScreen(),
           const SizedBox.shrink(),
-          const ActivityScreen(),
+          ActivityScreen(isVisible: _tab == 3),
           ProfileScreen(userId: me, showAppBar: false),
         ],
       ),
     );
   }
+}
+
+class _SearchPage extends StatelessWidget {
+  const _SearchPage();
+
+  @override
+  Widget build(BuildContext context) => AdaptiveScaffold(
+    appBar: AdaptiveAppBar(title: 'Search'),
+    body: const SearchScreen(),
+  );
 }

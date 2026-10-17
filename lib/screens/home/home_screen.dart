@@ -1,9 +1,15 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
+import 'package:threads/core/navigation.dart';
 import 'package:threads/models/thread_post.dart';
+import 'package:threads/providers/core_providers.dart';
 import 'package:threads/providers/feed_providers.dart';
+import 'package:threads/screens/compose/compose_screen.dart';
+import 'package:threads/screens/search/search_screen.dart';
+import 'package:threads/widgets/avatar.dart';
 import 'package:threads/widgets/thread_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -14,8 +20,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int _feed = 0; // 0 = For you, 1 = Following
   final _scroll = ScrollController();
+
+  /// Which feed is on screen: 0 = For you, 1 = Following.
+  int get _feed => ref.read(selectedFeedProvider);
 
   @override
   void initState() {
@@ -71,41 +79,130 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final feed = _feed == 0
+    final feedIndex = ref.watch(selectedFeedProvider);
+    final feed = feedIndex == 0
         ? ref.watch(forYouFeedProvider)
         : ref.watch(followingFeedProvider);
-    return CustomScrollView(
+    return AppRefreshView(
       controller: _scroll,
+      onRefresh: _refresh,
       slivers: [
-        CupertinoSliverRefreshControl(onRefresh: _refresh),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: CupertinoSlidingSegmentedControl<int>(
-              groupValue: _feed,
-              children: const {0: Text('For you'), 1: Text('Following')},
-              onValueChanged: (value) {
-                if (value != null) setState(() => _feed = value);
-              },
-            ),
-          ),
-        ),
+        SliverToBoxAdapter(child: _homeHeader()),
         ...feed.when<List<Widget>>(
           loading: () => [
             const SliverFillRemaining(
               hasScrollBody: false,
-              child: Center(child: CupertinoActivityIndicator()),
+              child: Center(child: AppSpinner()),
             ),
           ],
           error: (error, _) => [
             SliverFillRemaining(
               hasScrollBody: false,
-              child: _RetryView(message: friendlyError(error), onRetry: _refresh),
+              child: _RetryView(
+                message: friendlyError(error),
+                onRetry: _refresh,
+              ),
             ),
           ],
           data: _postSlivers,
         ),
       ],
+    );
+  }
+
+  Widget _homeHeader() {
+    final userId = ref.watch(currentUserIdProvider);
+    final profile = userId == null
+        ? null
+        : ref.watch(profileByIdProvider(userId)).value;
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => openAppDrawer(context),
+                  child: Icon(
+                    AppIcons.line_horizontal_3,
+                    size: 31,
+                    color: context.colors.secondaryLabel,
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'threads',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        fontStyle: FontStyle.italic,
+                        letterSpacing: -1.6,
+                        color: context.colors.label,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () =>
+                      openScreen<void>(context, const _HomeSearchPage()),
+                  child: Icon(
+                    AppIcons.search,
+                    size: 31,
+                    color: context.colors.secondaryLabel,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => openScreen<void>(
+              context,
+              const ComposeScreen(),
+              fullscreen: true,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+              child: Row(
+                children: [
+                  Avatar(
+                    name: profile?.name ?? 'You',
+                    url: profile?.avatarUrl,
+                    size: 58,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile?.username ?? 'you',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          "What's new?",
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: context.colors.secondaryLabel,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Container(height: .5, color: context.colors.separator),
+        ],
+      ),
     );
   }
 
@@ -118,9 +215,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Text(
-                _feed == 0 ? 'No threads yet.' : 'Follow people to fill this feed.',
+                _feed == 0
+                    ? 'No threads yet.'
+                    : 'Follow people to fill this feed.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: CupertinoColors.secondaryLabel),
+                style: TextStyle(color: context.colors.secondaryLabel),
               ),
             ),
           ),
@@ -129,38 +228,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     return [
       SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            if (index == posts.length) {
-              return _hasMore
-                  ? const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Center(child: CupertinoActivityIndicator()),
-                    )
-                  : const SizedBox(height: 40);
-            }
-            final post = posts[index];
-            return Column(
-              children: [
-                ThreadCard(
-                  key: ValueKey(post.id),
-                  post: post,
-                  onChanged: _replace,
-                  onDeleted: () => _remove(post.id),
-                ),
-                Container(
-                  height: 0.5,
-                  margin: const EdgeInsets.only(left: 68),
-                  color: CupertinoColors.separator,
-                ),
-              ],
-            );
-          },
-          childCount: posts.length + 1,
-        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          if (index == posts.length) {
+            return _hasMore
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(child: AppSpinner()),
+                  )
+                : const SizedBox(height: 40);
+          }
+          final post = posts[index];
+          return Column(
+            children: [
+              ThreadCard(
+                key: ValueKey(post.id),
+                post: post,
+                onChanged: _replace,
+                onDeleted: () => _remove(post.id),
+              ),
+              Container(
+                height: 0.5,
+                margin: const EdgeInsets.only(left: 68),
+                color: context.colors.separator,
+              ),
+            ],
+          );
+        }, childCount: posts.length + 1),
       ),
     ];
   }
+}
+
+class _HomeSearchPage extends StatelessWidget {
+  const _HomeSearchPage();
+
+  @override
+  Widget build(BuildContext context) => AdaptiveScaffold(
+    appBar: AdaptiveAppBar(title: 'Search'),
+    body: const SearchScreen(),
+  );
 }
 
 class _RetryView extends StatelessWidget {
@@ -178,7 +284,10 @@ class _RetryView extends StatelessWidget {
           children: [
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            CupertinoButton.filled(onPressed: onRetry, child: const Text('Try again')),
+            AdaptiveButton.child(
+              onPressed: onRetry,
+              child: const Text('Try again'),
+            ),
           ],
         ),
       ),

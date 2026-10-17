@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/models/profile.dart';
@@ -53,7 +54,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
       appBar: AdaptiveAppBar(title: _isBlocked ? 'Blocked accounts' : 'Muted accounts'),
       body: people.when<Widget>(
         skipLoadingOnReload: true,
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (all) {
           final list = all.where((person) => !_removed.contains(person.id)).toList();
@@ -61,7 +62,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
             return Center(
               child: Text(
                 _isBlocked ? 'You have not blocked anyone.' : 'You have not muted anyone.',
-                style: const TextStyle(color: CupertinoColors.secondaryLabel),
+                style: TextStyle(color: context.colors.secondaryLabel),
               ),
             );
           }
@@ -73,7 +74,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   _isBlocked
                       ? 'Blocked accounts cannot see your threads or follow you. Unblocking does not bring old follows back.'
                       : 'Threads from muted accounts stay out of your feeds. They are not told.',
-                  style: const TextStyle(fontSize: 13, color: CupertinoColors.secondaryLabel),
+                  style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
                 ),
               ),
               for (final person in list)
@@ -86,7 +87,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                         onPressed: _busy.contains(person.id) ? null : () => _undo(person),
                       ),
                     ),
-                    Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: CupertinoColors.separator),
+                    Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: context.colors.separator),
                   ],
                 ),
             ],

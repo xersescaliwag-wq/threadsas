@@ -2,6 +2,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/social_providers.dart';
 abstract class _FeedNotifier extends AsyncNotifier<List<ThreadPost>> {
   static const pageSize = 20;
@@ -19,6 +20,9 @@ abstract class _FeedNotifier extends AsyncNotifier<List<ThreadPost>> {
   }
   /// Pull to refresh.
   Future<void> refresh() async {
+    // The rows coming back are the server's truth, so any shared copy of a post
+    // is out of date and would shadow them.
+    ref.read(postStateProvider.notifier).clear();
     state = await AsyncValue.guard(() async {
       final page = await fetchPage();
       _hasMore = page.length >= pageSize;
@@ -79,3 +83,18 @@ final forYouFeedProvider =
     AsyncNotifierProvider<ForYouFeed, List<ThreadPost>>(ForYouFeed.new);
 final followingFeedProvider =
     AsyncNotifierProvider<FollowingFeed, List<ThreadPost>>(FollowingFeed.new);
+
+/// Which home feed is on screen: 0 = For you, 1 = Following. Home reads it, and
+/// the feeds drawer (owned by the shell's scaffold) writes it.
+class SelectedFeed extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void select(int value) {
+    if (state != value) state = value;
+  }
+}
+
+final selectedFeedProvider = NotifierProvider<SelectedFeed, int>(
+  SelectedFeed.new,
+);

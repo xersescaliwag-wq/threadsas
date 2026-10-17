@@ -1,6 +1,7 @@
 // lib/widgets/media_grid.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/screens/thread/media_viewer_screen.dart';
 
@@ -55,14 +56,14 @@ class MediaGrid extends StatelessWidget {
                       shown[i],
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
-                          const ColoredBox(color: CupertinoColors.systemGrey5),
+                          ColoredBox(color: context.colors.systemGrey5),
                     ),
                     if (_kindAt(i) == 'video')
-                      const Center(
+                      Center(
                         child: Icon(
-                          CupertinoIcons.play_circle_fill,
+                          AppIcons.play_circle_fill,
                           size: 44,
-                          color: CupertinoColors.white,
+                          color: context.colors.white,
                         ),
                       ),
                     if (_kindAt(i) == 'gif')
@@ -77,10 +78,10 @@ class MediaGrid extends StatelessWidget {
                         alignment: Alignment.center,
                         child: Text(
                           '+$hidden',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w600,
-                            color: CupertinoColors.white,
+                            color: context.colors.white,
                           ),
                         ),
                       ),
@@ -109,10 +110,10 @@ class _KindBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
-          color: CupertinoColors.white,
+          color: context.colors.white,
         ),
       ),
     );

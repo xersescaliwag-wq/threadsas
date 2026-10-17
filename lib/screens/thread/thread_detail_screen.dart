@@ -3,11 +3,13 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/config.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/thread_providers.dart';
 import 'package:threads/widgets/thread_card.dart';
 
@@ -37,6 +39,9 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
   }
 
   Future<void> _refresh() async {
+    // A pull to refresh asks the server for the truth, so the shared copies of
+    // posts the user reacted to elsewhere are out of date now.
+    ref.read(postStateProvider.notifier).clear();
     _reload();
     await ref.read(threadDetailProvider(widget.threadId).future);
   }
@@ -53,7 +58,7 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Thread'),
       body: detail.when<Widget>(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (data) => data == null
             ? const Center(child: Text('This thread is no longer available.'))
@@ -67,9 +72,9 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
     return Column(
       children: [
         Expanded(
-          child: CustomScrollView(
+          child: AppRefreshView(
+            onRefresh: _refresh,
             slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _refresh),
               SliverList(
                 delegate: SliverChildListDelegate([
                   for (final ancestor in detail.ancestors)
@@ -85,7 +90,7 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
                     onDeleted: () => Navigator.of(context).pop(),
                     opensOnTap: false,
                   ),
-                  Container(height: 0.5, color: CupertinoColors.separator),
+                  Container(height: 0.5, color: context.colors.separator),
                   ..._replyTree(detail),
                 ]),
               ),
@@ -123,7 +128,7 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
                   onChanged: _changed,
                   onDeleted: () => setState(() => _removed.add(post.id)),
                 ),
-                Container(height: 0.5, color: CupertinoColors.separator),
+                Container(height: 0.5, color: context.colors.separator),
               ],
             ),
           ),
@@ -181,10 +186,10 @@ class _QuickReplyState extends ConsumerState<_QuickReply> {
       top: false,
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        decoration: const BoxDecoration(
-          color: CupertinoColors.systemBackground,
+        decoration: BoxDecoration(
+          color: context.colors.systemBackground,
           border: Border(
-            top: BorderSide(color: CupertinoColors.separator, width: 0.5),
+            top: BorderSide(color: context.colors.separator, width: 0.5),
           ),
         ),
         child: Row(
@@ -200,10 +205,10 @@ class _QuickReplyState extends ConsumerState<_QuickReply> {
               ),
             ),
             const SizedBox(width: 8),
-            CupertinoButton(
+            AdaptiveButton.child(
               padding: EdgeInsets.zero,
               onPressed: _busy ? null : _send,
-              child: const Icon(CupertinoIcons.arrow_up_circle_fill, size: 32),
+              child: Icon(AppIcons.arrow_up_circle_fill, size: 32),
             ),
           ],
         ),

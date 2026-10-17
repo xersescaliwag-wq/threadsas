@@ -2,6 +2,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/navigation.dart';
@@ -77,21 +78,22 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         NotificationType.followRequest => 'asked to follow you',
       };
   IconData _icon(NotificationType type) => switch (type) {
-        NotificationType.like => CupertinoIcons.heart_fill,
-        NotificationType.reply => CupertinoIcons.chat_bubble_fill,
-        NotificationType.repost => CupertinoIcons.arrow_2_squarepath,
-        NotificationType.quote => CupertinoIcons.quote_bubble_fill,
-        NotificationType.mention => CupertinoIcons.at,
-        NotificationType.follow => CupertinoIcons.person_fill,
-        NotificationType.followRequest => CupertinoIcons.person_badge_plus_fill,
+        NotificationType.like => AppIcons.heart_fill,
+        NotificationType.reply => AppIcons.chat_bubble_fill,
+        NotificationType.repost => AppIcons.arrow_2_squarepath,
+        NotificationType.quote => AppIcons.quote_bubble_fill,
+        NotificationType.mention => AppIcons.at,
+        NotificationType.follow => AppIcons.person_fill,
+        NotificationType.followRequest => AppIcons.person_badge_plus_fill,
       };
-  Color _color(NotificationType type) => switch (type) {
-        NotificationType.like => CupertinoColors.systemRed,
-        NotificationType.reply => CupertinoColors.systemBlue,
-        NotificationType.repost => CupertinoColors.systemGreen,
-        NotificationType.quote => CupertinoColors.systemPurple,
-        NotificationType.mention => CupertinoColors.systemOrange,
-        NotificationType.follow || NotificationType.followRequest => CupertinoColors.systemIndigo,
+  Color _color(BuildContext context, NotificationType type) =>
+      switch (type) {
+        NotificationType.like => context.colors.systemRed,
+        NotificationType.reply => context.colors.systemBlue,
+        NotificationType.repost => context.colors.systemGreen,
+        NotificationType.quote => context.colors.systemPurple,
+        NotificationType.mention => context.colors.systemOrange,
+        NotificationType.follow || NotificationType.followRequest => context.colors.systemIndigo,
       };
   @override
   Widget build(BuildContext context) {
@@ -108,17 +110,17 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     // skipLoadingOnReload keeps the rows on screen while a realtime reload runs.
     return activity.when<Widget>(
       skipLoadingOnReload: true,
-      loading: () => const Center(child: CupertinoActivityIndicator()),
+      loading: () => const Center(child: AppSpinner()),
       error: (error, _) => Center(child: Text(friendlyError(error))),
-      data: (items) => CustomScrollView(
+      data: (items) => AppRefreshView(
+        onRefresh: _refresh,
         slivers: [
-          CupertinoSliverRefreshControl(onRefresh: _refresh),
           if (requests.isNotEmpty) SliverToBoxAdapter(child: _requestsRow(requests.length)),
           if (items.isEmpty)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: Text('No activity yet.', style: TextStyle(color: CupertinoColors.secondaryLabel)),
+                child: Text('No activity yet.', style: TextStyle(color: context.colors.secondaryLabel)),
               ),
             )
           else
@@ -127,7 +129,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 (context, index) => Column(
                   children: [
                     _row(items[index]),
-                    Container(height: 0.5, margin: const EdgeInsets.only(left: 74), color: CupertinoColors.separator),
+                    Container(height: 0.5, margin: const EdgeInsets.only(left: 74), color: context.colors.separator),
                   ],
                 ),
                 childCount: items.length,
@@ -143,19 +145,19 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       onTap: () => openScreen<void>(context, const FollowRequestsScreen()),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: CupertinoColors.separator, width: 0.5)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: context.colors.separator, width: 0.5)),
         ),
         child: Row(
           children: [
-            const Icon(CupertinoIcons.person_2_fill, size: 22),
+            Icon(AppIcons.person_2_fill, size: 22),
             const SizedBox(width: 12),
             const Expanded(
               child: Text('Follow requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            Text('$count', style: const TextStyle(color: CupertinoColors.secondaryLabel)),
+            Text('$count', style: TextStyle(color: context.colors.secondaryLabel)),
             const SizedBox(width: 6),
-            const Icon(CupertinoIcons.chevron_forward, size: 16, color: CupertinoColors.secondaryLabel),
+            Icon(AppIcons.chevron_forward, size: 16, color: context.colors.secondaryLabel),
           ],
         ),
       ),
@@ -166,11 +168,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       width: 20,
       height: 20,
       decoration: BoxDecoration(
-        color: _color(type),
+        color: _color(context, type),
         shape: BoxShape.circle,
-        border: Border.all(color: CupertinoColors.systemBackground, width: 2),
+        border: Border.all(color: context.colors.systemBackground, width: 2),
       ),
-      child: Icon(_icon(type), size: 11, color: CupertinoColors.white),
+      child: Icon(_icon(type), size: 11, color: context.colors.white),
     );
   }
   Widget _row(AppNotification item) {
@@ -180,7 +182,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: () => _open(item),
       child: Container(
-        color: isFresh ? CupertinoColors.systemGrey6 : null,
+        color: isFresh ? context.colors.systemGrey6 : null,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,7 +212,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                       const SizedBox(width: 6),
                       Text(
                         timeAgo(item.createdAt),
-                        style: const TextStyle(fontSize: 14, color: CupertinoColors.secondaryLabel),
+                        style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
                       ),
                     ],
                   ),
@@ -222,7 +224,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                         preview,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14, color: CupertinoColors.secondaryLabel),
+                        style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
                       ),
                     ),
                 ],
@@ -233,7 +235,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 margin: const EdgeInsets.only(left: 8, top: 6),
                 width: 9,
                 height: 9,
-                decoration: const BoxDecoration(color: CupertinoColors.activeBlue, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: context.colors.activeBlue, shape: BoxShape.circle),
               ),
           ],
         ),

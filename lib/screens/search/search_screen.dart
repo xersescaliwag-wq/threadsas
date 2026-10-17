@@ -1,8 +1,10 @@
 // lib/screens/search/search_screen.dart
 import 'dart:async';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/models/profile.dart';
@@ -48,7 +50,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: CupertinoSearchTextField(
+          child: AppSearchField(
             controller: _controller,
             placeholder: 'Search',
             onChanged: _onChanged,
@@ -57,12 +59,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: CupertinoSlidingSegmentedControl<int>(
-            groupValue: _mode,
-            children: const {0: Text('People'), 1: Text('Threads'), 2: Text('Topics')},
-            onValueChanged: (value) {
-              if (value != null) setState(() => _mode = value);
-            },
+          child: AdaptiveSegmentedControl(
+            labels: const ['People', 'Threads', 'Topics'],
+            selectedIndex: _mode,
+            onValueChanged: (value) => setState(() => _mode = value),
           ),
         ),
         Expanded(child: _results()),
@@ -83,7 +83,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: CupertinoColors.secondaryLabel),
+          style: TextStyle(color: context.colors.secondaryLabel),
         ),
       ),
     );
@@ -96,7 +96,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     required Widget Function(T item) row,
   }) {
     return value.when<Widget>(
-      loading: () => const Center(child: CupertinoActivityIndicator()),
+      loading: () => const Center(child: AppSpinner()),
       error: (error, _) => _message(friendlyError(error)),
       data: (items) {
         if (items.isEmpty) return _message(empty);
@@ -107,7 +107,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           itemBuilder: (context, index) => Column(
             children: [
               row(items[index]),
-              Container(height: 0.5, margin: EdgeInsets.only(left: indent), color: CupertinoColors.separator),
+              Container(height: 0.5, margin: EdgeInsets.only(left: indent), color: context.colors.separator),
             ],
           ),
         );
@@ -160,10 +160,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
               Text(
                 '${hit.uses} ${hit.uses == 1 ? 'thread' : 'threads'}',
-                style: const TextStyle(color: CupertinoColors.secondaryLabel),
+                style: TextStyle(color: context.colors.secondaryLabel),
               ),
               const SizedBox(width: 6),
-              const Icon(CupertinoIcons.chevron_forward, size: 16, color: CupertinoColors.secondaryLabel),
+              Icon(AppIcons.chevron_forward, size: 16, color: context.colors.secondaryLabel),
             ],
           ),
         ),
@@ -173,11 +173,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Text(
             'Popular topics',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: CupertinoColors.secondaryLabel),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.colors.secondaryLabel),
           ),
         ),
         Expanded(child: list),

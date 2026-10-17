@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/messages.dart';
@@ -11,6 +12,7 @@ import 'package:threads/models/community.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/community_providers.dart';
 import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/social_providers.dart';
 
 import 'package:threads/screens/compose/compose_screen.dart';
@@ -58,6 +60,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       _endReached = false;
       _header = null;
     });
+    // The rows coming back are the server's truth, so shared copies are out of date.
+    ref.read(postStateProvider.notifier).clear();
     ref.invalidate(communityProvider(_id));
     ref.invalidate(communityFeedProvider(_id));
     await ref.read(communityProvider(_id).future);
@@ -138,13 +142,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           if (community?.joinedByMe ?? false)
             AdaptiveAppBarAction(
               iosSymbol: 'square.and.pencil',
-              icon: CupertinoIcons.pencil,
+              icon: AppIcons.pencil,
               onPressed: () => _compose(community!),
             ),
         ],
       ),
       body: headerAsync.when<Widget>(
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (loaded) {
           final shown = _header ?? loaded;
@@ -155,7 +159,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                 _headerSliver(shown, onToggle: () => _toggleMembership(shown)),
                 const SliverFillRemaining(
                   hasScrollBody: false,
-                  child: Center(child: CupertinoActivityIndicator()),
+                  child: Center(child: AppSpinner()),
                 ),
               ],
             ),
@@ -180,9 +184,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       !muted.contains(post.author.id) && !_gone.contains(post.id))
                   .toList();
               final hasMore = !_endReached && page.length >= _pageSize;
-              return CustomScrollView(
+              return AppRefreshView(
+                onRefresh: _refresh,
                 slivers: [
-                  CupertinoSliverRefreshControl(onRefresh: _refresh),
                   _headerSliver(shown, onToggle: () => _toggleMembership(shown)),
                   if (!shown.joinedByMe)
                     SliverToBoxAdapter(
@@ -215,7 +219,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                               Container(
                                 height: 0.5,
                                 margin: const EdgeInsets.only(left: 68),
-                                color: CupertinoColors.separator,
+                                color: context.colors.separator,
                               ),
                             ],
                           ),
@@ -224,8 +228,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                             padding: const EdgeInsets.all(16),
                             child: Center(
                               child: _loadingMore
-                                  ? const CupertinoActivityIndicator()
-                                  : CupertinoButton(
+                                  ? const AppSpinner()
+                                  : AdaptiveButton.child(
                                       onPressed: () => _loadMore(all),
                                       child: const Text('Load more'),
                                     ),
@@ -261,10 +265,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                   ),
                 ),
                 if (community.isPrivate)
-                  const Icon(
-                    CupertinoIcons.lock_fill,
+                  Icon(
+                    AppIcons.lock_fill,
                     size: 16,
-                    color: CupertinoColors.secondaryLabel,
+                    color: context.colors.secondaryLabel,
                   ),
               ],
             ),
@@ -273,9 +277,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
               'threads/${community.slug} · '
               '${compactCount(community.memberCount)} member'
               '${community.memberCount == 1 ? '' : 's'}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: CupertinoColors.secondaryLabel,
+                color: context.colors.secondaryLabel,
               ),
             ),
             if (community.description.isNotEmpty) ...[
@@ -289,7 +293,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
               onPressed: _busyMembership ? null : onToggle,
             ),
             const SizedBox(height: 12),
-            Container(height: 0.5, color: CupertinoColors.separator),
+            Container(height: 0.5, color: context.colors.separator),
           ],
         ),
       ),
@@ -315,10 +319,10 @@ class _Invite extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
       child: Column(
         children: [
-          const Icon(
-            CupertinoIcons.person_2,
+          Icon(
+            AppIcons.person_2,
             size: 40,
-            color: CupertinoColors.systemGrey,
+            color: context.colors.systemGrey,
           ),
           const SizedBox(height: 12),
           Text(
@@ -326,7 +330,7 @@ class _Invite extends StatelessWidget {
                 ? 'This community is private. Join to see its threads.'
                 : 'Join this community to see its threads.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: CupertinoColors.secondaryLabel),
+            style: TextStyle(color: context.colors.secondaryLabel),
           ),
           const SizedBox(height: 16),
           SmallButton(label: 'Join', filled: true, onPressed: busy ? null : onJoin),
@@ -352,7 +356,7 @@ class _EmptyFeed extends StatelessWidget {
           Text(
             'No threads in ${community.name} yet.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: CupertinoColors.secondaryLabel),
+            style: TextStyle(color: context.colors.secondaryLabel),
           ),
           const SizedBox(height: 16),
           SmallButton(

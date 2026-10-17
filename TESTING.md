@@ -9,12 +9,15 @@ From the project root:
 
 ```
 flutter analyze
-grep -rn "material" lib/
+grep -rln "package:flutter/material.dart" lib/
 ```
 
-- `flutter analyze` — **no errors**. (Current state: 0 errors, 0 warnings, 35 info-level lints.)
-- The grep must print **nothing**. Your code never imports Material; `adaptive_platform_ui` does, for
-  its Android widgets, so the grep only looks at `lib/`.
+- `flutter analyze` — **no errors**. (Current state: 0 errors, 0 warnings, 8 info-level lints.)
+- The grep must print exactly one line: `lib/core/adaptive.dart`. That file is the single place allowed
+  to import Material (under the `material.` prefix) so Android gets Material widgets while iOS stays
+  Cupertino; every other file reaches Material only through that file's helpers (`AppSpinner`,
+  `AppIcons`, `context.colors`, `AppSearchField`, `adaptivePageRoute`, `showAppActionSheet`, …).
+  See deviations 11–13 in `TASKS.md`.
 
 The guide adds no tests, so `flutter test` has nothing to run unless you write some.
 
@@ -83,6 +86,8 @@ deletion test.
 | Post | Turn on Disappears in 24 hours and post | It shows at once, and later disappears from every feed | ☐ |
 | Post | Pin a post, then pin a second one | The first pin is replaced | ☐ |
 | Thread | Like, unlike, repost, undo repost, quote | Each change shows at once and survives a restart | ☐ |
+| Thread | Like a post in the feed, then open the author's profile (and your own profile tab) | The heart is filled and the count matches everywhere, with no "already exists" message | ☐ |
+| Thread | Like the same post twice in a row from two places | The count stays at 1; the second tap never reports a duplicate key | ☐ |
 | Thread | Reply, then reply to the reply | Replies nest and the reply count rises | ☐ |
 | Thread | Edit a post | The Edited label appears | ☐ |
 | Thread | Delete your own post | It leaves the feed and the database | ☐ |
@@ -96,6 +101,31 @@ deletion test.
 
 A test that passes on one device and fails on the other usually means realtime or a cache. Check the
 troubleshooting table in Step 20 before changing any code.
+
+### 18.4 Platform adaptation (Android vs iOS)
+
+The app should look native on each platform: Material 3 on Android, Cupertino on iOS ≤ 18, Liquid Glass
+on iOS 26+. Run this on **both** an Android device/emulator and an iPhone (or iOS simulator), in light
+**and** dark mode (Settings → Display).
+
+| Platform | Test | Expected | Done |
+|---|---|---|---|
+| Both | Open Home | Android: Material top bar; iOS: a Cupertino-style title. No For-you/Following control on Home any more — feed switching lives in the drawer | ☐ |
+| Both | Tap ☰ to open the Feeds drawer, switch to Following, then close it | Android: Material Drawer (slide + scrim), edge-swipe works, tapping a row closes it and switches the feed. iOS: drawer panel slides in, scrim dims, tap row closes and switches. | ☐ |
+| Both | Pull to refresh Home, Profile, a topic, a thread | Android: Material circular spinner + the Android refresh indicator; iOS: the iOS pull-down spinner | ☐ |
+| Both | Reopen the app (full restart) | Every tab icon is visible — no blank squares (see deviation 9: the MaterialIcons font is bundled for Android) | ☐ |
+| Both | Tap the **…** menu on your own post | Android: a bottom sheet sliding up with list rows (drag/tap outside to dismiss); iOS: a Cupertino action sheet with a Cancel button | ☐ |
+| Both | Tap the **…** menu on someone else's post, and on their profile | Same as above; Repost/Quote, Mute/Block/Report, Copy link all still work from the sheet | ☐ |
+| Both | Report a post (both entry points) | A dialog with a text box opens; Send returns the typed reason; Cancel returns nothing | ☐ |
+| Both | Compose: open the poll section, pick a duration | Android: Material segmented buttons; iOS: Cupertino one. 1/3/7 days still map to the right poll duration | ☐ |
+| Both | Compose: type in the composer, in a community picker, in Search | Android: Material outline/rounded fields; iOS: Cupertino fields. Typing, the character counter and search still work | ☐ |
+| Both | Settings (Privacy / Sharing / Account) and Settings → Instagram | Android: Material list rows with dividers and a chevron; iOS: inset-grouped Cupertino rows | ☐ |
+| Both | Toggle every switch (poll, cross-post, hide like count, ghost post, private account) | Android: Material switches; iOS: Cupertino switches. Each still saves | ☐ |
+| Both | Switch the device to **dark mode** and browse Home, Profile, Activity, Settings, the composer and thread detail | Text stays readable, secondary text/dividers are not light-gray-on-black, and the image placeholders are not glaring white boxes | ☐ |
+| iOS 26+ | Open Home, Profile, Settings and a thread | Liquid Glass toolbar/tab bar renders; no layout jumps | ☐ |
+
+> The dark-mode row is the one that catches colours left over from the Cupertino-only version: before
+> deviation 13 the greys resolved against the default *light* Cupertino theme even in dark mode.
 
 ## Step 21 feature tests
 
@@ -171,3 +201,75 @@ Deploy the function (`supabase functions deploy link-preview`) and run `supabase
 | Remove a member (owner does so) | The removed member loses access at once and the member count drops | ☐ |
 | A member leaves a community | They are removed, the feed becomes unavailable to them, and `member_count` decreases | ☐ |
 | A community post on an author's profile (as a member) | It is visible to members; RLS prevents non-members from seeing it | ☐ |
+
+### 21.6 Instagram cross-posting
+
+Code-complete, but **user-only to enable**: it needs a Meta app, a professional Instagram account linked
+to a Facebook Page, and Meta's review of `instagram_content_publish`. Set up first:
+
+```
+supabase secrets set META_APP_ID=... META_APP_SECRET=...
+supabase functions deploy instagram-oauth --no-verify-jwt
+supabase functions deploy instagram-publish
+```
+
+Then re-run the appended `Step 21.6` block of `supabase/schema.sql` in the SQL Editor, and add the
+redirect URI `https://dfccorjkvgvigzrpbiny.supabase.co/functions/v1/instagram-oauth` in the Meta app.
+
+| Test | Expected | Done |
+|---|---|---|
+| `select tablename, rowsecurity from pg_tables where schemaname = 'public';` | `instagram_accounts` and `instagram_posts` both show `true` | ☐ |
+| Settings → Sharing → Instagram → Connect | Meta's consent page opens in the browser (nothing in the app leaks the app secret) | ☐ |
+| Finish consent, then return to the app | The Instagram screen shows the connected handle (it re-checks on resume) | ☐ |
+| `select * from vault.secrets where name like 'instagram_token_%';` in the SQL Editor | A row exists; `select user_id, ig_user_id, username from public.instagram_accounts;` shows the link, with **no token column** | ☐ |
+| Sign in as a second account and `select * from public.instagram_accounts;` | No rows (owner-only policy) | ☐ |
+| Compose a new post with a JPEG photo while connected | The "Also post to Instagram" switch appears | ☐ |
+| Compose a new post with **no** media, or a reply, or a quote while connected | The switch is not shown | ☐ |
+| Post with the switch on and a JPEG photo | The thread posts, and the same photo appears on Instagram within a minute | ☐ |
+| Post with the switch on and a PNG/WebP/GIF photo | The thread still posts; a message says Instagram only accepts JPEG photos and MP4/MOV videos | ☐ |
+| Post with the switch on but a broken/absent network for Instagram | "The Instagram copy failed: …" appears; the thread is still saved | ☐ |
+| `select thread_id, status, ig_media_id from public.instagram_posts;` | The cross-posted thread has `status = 'published'` and a non-null `ig_media_id` | ☐ |
+| Sign in as a second account and read `instagram_posts` | No rows (owner-only policy) | ☐ |
+| Delete the cross-posted thread (with an Instagram copy) | The thread is deleted; a note explains Instagram has no delete API, so remove it in the Instagram app | ☐ |
+| Disconnect Instagram, then compose with media | The switch is gone; a later post is not shared | ☐ |
+| `select * from vault.secrets where name like 'instagram_token_%';` after disconnecting | The row is gone | ☐ |
+| Call `instagram-publish` with no token: `curl -X POST .../functions/v1/instagram-publish -d '{"thread_id":"..."}'` | 401 (platform rejects it, and the function checks the caller too) | ☐ |
+| Call `instagram-oauth` `start` with no token | 401 (the function checks the caller itself, since it is deployed without JWT verification) | ☐ |
+
+## Direct messages (post-guide addition)
+
+Not part of the guide — added on request (deviation 15 in `TASKS.md`). The guide's Messages tab was a
+placeholder; it is now a real inbox. The sender and the receiver must be **two different accounts**,
+because a conversation is between two people: use a second device, or the same device signed in as
+another account.
+
+Before testing, run the **"Direct messages"** block at the end of `supabase/schema.sql` in the SQL
+Editor (tables, function, trigger, policies, realtime). Verified as applied when:
+
+```sql
+select tablename, rowsecurity from pg_tables
+where schemaname = 'public' and tablename in
+  ('conversations', 'conversation_participants', 'messages');
+```
+
+…returns three rows, all `true`.
+
+| Test | Expected | Done |
+|---|---|---|
+| Sign in as Ana, open Ben's profile | **Follow** and **Message** appear side by side; your own profile still shows a single full-width **Edit profile** | ☐ |
+| Tap **Message** | The chat opens with an empty state and a "Message" composer (no error, no crash) | ☐ |
+| Type a message and tap send | The bubble appears on the right immediately; the composer clears; pulling the list down keeps it | ☐ |
+| Sign in as Ben and open the Messages tab | Ana's thread is at the top with her avatar, the message text, a time, a **bold** row and a blue unread dot | ☐ |
+| Open the thread as Ben | The bubble appears on the left; the row stops being bold and the dot disappears (read receipt) | ☐ |
+| Reply as Ben while Ana has the thread open | Ana's chat shows the new bubble **without** a manual refresh (realtime) | ☐ |
+| With the inbox open for Ana, have Ben send a message | The inbox refreshes and reorders (realtime) | ☐ |
+| Type a name/username in the inbox search | The list filters; clearing it shows everything again | ☐ |
+| Sign in as Ana and tap **Message** on Ben's profile a second time | The **same** thread opens — no duplicate conversation is created | ☐ |
+| Seed the same pair twice: `select count(*) from public.conversations;` after both directions | **1** row per pair (`unique (user_a, user_b)`) | ☐ |
+| Sign in as Cy and `select * from public.conversations;` / `messages;` / `conversation_participants;` | No rows — only the two participants can see a thread (RLS) | ☐ |
+| As Cy, insert into `messages` a row for Ana and Ben's conversation (`sender_id` = Cy) | Rejected by the `messages_insert_own` policy (RLS error) | ☐ |
+| As Cy, `insert into public.conversations ...` directly | Rejected — there is no client insert policy; threads are only created by `start_conversation` | ☐ |
+| Block Ben as Ana, then `select public.start_conversation('<ben-id>');` in the SQL Editor as Ana | Error `you cannot message this account`; no new row | ☐ |
+| Send a 5000-character message from the composer | "Message too long — Messages can be up to 4000 characters."; nothing is inserted | ☐ |
+| Kill the app and reopen, then open Messages | The conversation is still there with its newest message (loaded from the database, not memory) | ☐ |
+| Dark mode (Android and iOS) | Incoming bubbles are a dark grey, outgoing bubbles keep white text, the time labels stay readable | ☐ |

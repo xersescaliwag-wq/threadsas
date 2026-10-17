@@ -3,6 +3,7 @@ import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/models/profile.dart';
@@ -51,18 +52,18 @@ class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen> {
       appBar: AdaptiveAppBar(title: 'Follow requests'),
       body: requests.when<Widget>(
         skipLoadingOnReload: true,
-        loading: () => const Center(child: CupertinoActivityIndicator()),
+        loading: () => const Center(child: AppSpinner()),
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (all) {
           final people = all.where((person) => !_answered.contains(person.id)).toList();
           if (people.isEmpty) {
-            return const Center(
-              child: Text('No pending requests.', style: TextStyle(color: CupertinoColors.secondaryLabel)),
+            return Center(
+              child: Text('No pending requests.', style: TextStyle(color: context.colors.secondaryLabel)),
             );
           }
-          return CustomScrollView(
+          return AppRefreshView(
+            onRefresh: _refresh,
             slivers: [
-              CupertinoSliverRefreshControl(onRefresh: _refresh),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
@@ -88,7 +89,7 @@ class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen> {
                             ],
                           ),
                         ),
-                        Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: CupertinoColors.separator),
+                        Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: context.colors.separator),
                       ],
                     );
                   },

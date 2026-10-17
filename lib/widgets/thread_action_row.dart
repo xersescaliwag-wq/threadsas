@@ -2,6 +2,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/formatters.dart';
 import 'package:threads/core/links.dart';
 import 'package:threads/core/messages.dart';
@@ -78,25 +79,15 @@ class _ThreadActionRowState extends ConsumerState<ThreadActionRow> {
   /// The repost button offers two choices: a plain repost, or a quote with your own words.
   Future<void> _showRepostChoices() async {
     final post = widget.post;
-    final choice = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(sheetContext).pop('repost'),
-            child: Text(post.repostedByMe ? 'Undo repost' : 'Repost'),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.of(sheetContext).pop('quote'),
-            child: const Text('Quote'),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: const Text('Cancel'),
+    final choice = await showAppActionSheet<String>(
+      context,
+      items: [
+        AppActionSheetItem(
+          value: 'repost',
+          label: post.repostedByMe ? 'Undo repost' : 'Repost',
         ),
-      ),
+        const AppActionSheetItem(value: 'quote', label: 'Quote'),
+      ],
     );
     if (!mounted || choice == null) return;
     if (choice == 'repost') {
@@ -126,24 +117,24 @@ class _ThreadActionRowState extends ConsumerState<ThreadActionRow> {
     return Row(
       children: [
         _ActionButton(
-          icon: post.likedByMe ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-          tint: post.likedByMe ? CupertinoColors.systemRed : null,
+          icon: post.likedByMe ? AppIcons.heart_fill : AppIcons.heart,
+          tint: post.likedByMe ? context.colors.systemRed : null,
           count: hideCount ? null : post.likeCount,
           onTap: _toggleLike,
         ),
         _ActionButton(
-          icon: CupertinoIcons.chat_bubble,
+          icon: AppIcons.chat_bubble,
           count: post.replyCount,
           onTap: _reply,
         ),
         _ActionButton(
-          icon: CupertinoIcons.arrow_2_squarepath,
-          tint: post.repostedByMe ? CupertinoColors.activeGreen : null,
+          icon: AppIcons.arrow_2_squarepath,
+          tint: post.repostedByMe ? context.colors.activeGreen : null,
           count: post.repostCount + post.quoteCount,
           onTap: _showRepostChoices,
         ),
         _ActionButton(
-          icon: CupertinoIcons.paperplane,
+          icon: AppIcons.paperplane,
           onTap: () => copyThreadLink(context, post),
         ),
       ],
@@ -162,7 +153,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = tint ?? CupertinoColors.label;
+    final color = tint ?? context.colors.label;
     final shown = count;
     return Expanded(
       child: GestureDetector(

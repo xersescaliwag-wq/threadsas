@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/messages.dart';
 import 'package:threads/core/navigation.dart';
 import 'package:threads/providers/core_providers.dart';
@@ -101,16 +102,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             AdaptiveButton.child(
               onPressed: _logIn,
               child: _busy
-                  ? const CupertinoActivityIndicator()
+                  ? const AppSpinner()
                   : const Text('Log in'),
             ),
             const SizedBox(height: 12),
-            CupertinoButton(
+            AdaptiveButton.child(
               onPressed: () => openScreen<void>(context, const SignUpScreen()),
               child: const Text('Create an account'),
             ),
             const SizedBox(height: 4),
-            CupertinoButton(
+            AdaptiveButton.child(
               onPressed: _sendLink,
               child: const Text('Email me a sign-in link'),
             ),

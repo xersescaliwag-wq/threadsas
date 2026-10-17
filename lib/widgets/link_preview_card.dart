@@ -1,6 +1,7 @@
 // lib/widgets/link_preview_card.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/links.dart';
 import 'package:threads/providers/link_preview_providers.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,7 +32,7 @@ class LinkPreviewCard extends ConsumerWidget {
             launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: CupertinoColors.separator, width: 0.5),
+            border: Border.all(color: context.colors.separator, width: 0.5),
             borderRadius: BorderRadius.circular(14),
           ),
           clipBehavior: Clip.antiAlias,
@@ -45,7 +46,7 @@ class LinkPreviewCard extends ConsumerWidget {
                     imageUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
-                        const ColoredBox(color: CupertinoColors.systemGrey5),
+                        ColoredBox(color: context.colors.systemGrey5),
                   ),
                 ),
               Padding(
@@ -55,9 +56,9 @@ class LinkPreviewCard extends ConsumerWidget {
                   children: [
                     Text(
                       host,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: CupertinoColors.secondaryLabel,
+                        color: context.colors.secondaryLabel,
                       ),
                     ),
                     if (title != null && title.isNotEmpty) ...[
@@ -78,9 +79,9 @@ class LinkPreviewCard extends ConsumerWidget {
                         description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 13,
-                          color: CupertinoColors.secondaryLabel,
+                          color: context.colors.secondaryLabel,
                         ),
                       ),
                     ],

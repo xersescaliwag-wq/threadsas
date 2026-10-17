@@ -1,6 +1,7 @@
 // lib/screens/thread/media_viewer_screen.dart
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:threads/core/adaptive.dart';
 import 'package:threads/widgets/video_player_view.dart';
 
 /// Full-screen view of one photo, video or GIF.
@@ -22,7 +23,7 @@ class MediaViewerScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       appBar: const AdaptiveAppBar(title: ''),
-      backgroundColor: CupertinoColors.black,
+      backgroundColor: context.colors.black,
       body: Center(
         child: Stack(
           alignment: Alignment.center,
@@ -32,10 +33,10 @@ class MediaViewerScreen extends StatelessWidget {
                 : Image.network(
                     url,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Icon(
-                      CupertinoIcons.exclamationmark_triangle,
+                    errorBuilder: (context, error, stackTrace) => Icon(
+                      AppIcons.exclamationmark_triangle,
                       size: 32,
-                      color: CupertinoColors.white,
+                      color: context.colors.white,
                     ),
                   ),
             if (kind == 'gif')
@@ -63,12 +64,12 @@ class _GifBadge extends StatelessWidget {
         color: const Color(0x99000000),
         borderRadius: BorderRadius.circular(5),
       ),
-      child: const Text(
+      child: Text(
         'GIF',
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: CupertinoColors.white,
+          color: context.colors.white,
         ),
       ),
     );

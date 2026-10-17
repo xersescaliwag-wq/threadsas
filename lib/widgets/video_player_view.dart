@@ -2,6 +2,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
+import 'package:threads/core/adaptive.dart';
 
 class VideoPlayerView extends StatefulWidget {
   const VideoPlayerView({super.key, required this.url});
@@ -48,12 +49,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   @override
   Widget build(BuildContext context) {
     if (_failed) {
-      return const Center(
-        child: Icon(CupertinoIcons.exclamationmark_triangle, size: 32),
+      return Center(
+        child: Icon(AppIcons.exclamationmark_triangle, size: 32),
       );
     }
     if (!_ready) {
-      return const Center(child: CupertinoActivityIndicator());
+      return const Center(child: AppSpinner());
     }
     return GestureDetector(
       onTap: _toggle,
@@ -65,10 +66,10 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
             child: VideoPlayer(_controller),
           ),
           if (!_controller.value.isPlaying)
-            const Icon(
-              CupertinoIcons.play_circle_fill,
+            Icon(
+              AppIcons.play_circle_fill,
               size: 56,
-              color: CupertinoColors.white,
+              color: context.colors.white,
             ),
         ],
       ),
