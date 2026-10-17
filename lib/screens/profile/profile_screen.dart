@@ -1,0 +1,362 @@
+// lib/screens/profile/profile_screen.dart
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:threads/core/errors.dart';
+import 'package:threads/core/formatters.dart';
+import 'package:threads/core/messages.dart';
+import 'package:threads/core/navigation.dart';
+import 'package:threads/data/social_repository.dart';
+import 'package:threads/models/profile.dart';
+import 'package:threads/models/thread_post.dart';
+import 'package:threads/providers/core_providers.dart';
+import 'package:threads/providers/feed_providers.dart';
+import 'package:threads/providers/social_providers.dart';
+import 'package:threads/providers/thread_providers.dart';
+import 'package:threads/screens/profile/edit_profile_screen.dart';
+import 'package:threads/screens/profile/follow_list_screen.dart';
+import 'package:threads/widgets/avatar.dart';
+import 'package:threads/widgets/thread_card.dart';
+import 'package:url_launcher/url_launcher.dart';
+const _pageSize = 20;
+
+class ProfileScreen extends ConsumerStatefulWidget {
+  const ProfileScreen({super.key, required this.userId, this.showAppBar = true});
+  final String userId;
+  final bool showAppBar;
+  @override
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  static const _tabNames = ['threads', 'replies', 'reposts'];
+  int _tab = 0;
+  final Map<String, ThreadPost> _edits = {};
+  final Set<String> _gone = {};
+  final List<ThreadPost> _more = [];
+  bool _endReached = false;
+  bool _loadingMore = false;
+  String get _tabName => _tabNames[_tab];
+  ThreadPost _current(ThreadPost post) => _edits[post.id] ?? post;
+  void _changed(ThreadPost post) => setState(() => _edits[post.id] = post);
+  void _selectTab(int tab) {
+    setState(() {
+      _tab = tab;
+      _more.clear();
+      _gone.clear();
+      _endReached = false;
+    });
+  }
+  Future<void> _refresh() async {
+    setState(() {
+      _more.clear();
+      _gone.clear();
+      _edits.clear();
+      _endReached = false;
+    });
+    ref.invalidate(profileByIdProvider(widget.userId));
+    ref.invalidate(followStateProvider(widget.userId));
+    ref.invalidate(pinnedThreadProvider(widget.userId));
+    ref.invalidate(profileTabProvider((widget.userId, _tabName)));
+    await ref.read(profileTabProvider((widget.userId, _tabName)).future);
+  }
+  /// Fetches the next page of the current tab. Each page starts after the oldest post on screen.
+  Future<void> _loadMore(List<ThreadPost> shown) async {
+    if (_loadingMore || _endReached || shown.isEmpty) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ref.read(threadRepositoryProvider).fetchByAuthor(
+            widget.userId,
+            tab: _tabName,
+            before: shown.last.createdAt,
+          );
+      setState(() {
+        _more.addAll(page);
+        if (page.length < _pageSize) _endReached = true;
+      });
+    } catch (error) {
+      if (mounted) await showError(context, error);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
+  Future<void> _toggleFollow(Profile profile, FollowState current) async {
+    try {
+      final social = ref.read(socialRepositoryProvider);
+      if (current == FollowState.none) {
+        await social.follow(profile.id);
+      } else {
+        final requested = current == FollowState.requested;
+        final sure = await confirm(
+          context,
+          title: requested ? 'Cancel request?' : 'Unfollow @${profile.username}?',
+          message: requested
+              ? 'Your follow request will be withdrawn.'
+              : 'You will stop seeing their posts in Following.',
+          actionLabel: requested ? 'Cancel request' : 'Unfollow',
+          destructive: true,
+        );
+        if (!sure) return;
+        await social.unfollow(profile.id);
+      }
+      ref.invalidate(followStateProvider(profile.id));
+      ref.invalidate(profileByIdProvider(profile.id));
+      ref.invalidate(followingFeedProvider);
+    } catch (error) {
+      if (mounted) await showError(context, error);
+    }
+  }
+  Future<void> _editProfile(Profile profile) async {
+    final saved = await openScreen<bool>(context, EditProfileScreen(profile: profile));
+    if (saved == true) await _refresh();
+  }
+  void _openWebsite(String value) {
+    final url = value.startsWith('http') ? value : 'https://$value';
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+  String _followLabel(FollowState state) => switch (state) {
+        FollowState.none => 'Follow',
+        FollowState.following => 'Following',
+        FollowState.requested => 'Requested',
+      };
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(profileByIdProvider(widget.userId));
+    final me = ref.watch(currentUserIdProvider);
+    final body = profileAsync.when<Widget>(
+      loading: () => const Center(child: CupertinoActivityIndicator()),
+      error: (error, _) => Center(child: Text(friendlyError(error))),
+      data: (profile) {
+        if (profile == null) {
+          return const Center(child: Text('This account is not available.'));
+        }
+        return _buildBody(profile, isMine: profile.id == me);
+      },
+    );
+    if (!widget.showAppBar) return body;
+    return AdaptiveScaffold(
+      appBar: AdaptiveAppBar(title: profileAsync.value?.username ?? 'Profile'),
+      body: body,
+    );
+  }
+  Widget _buildBody(Profile profile, {required bool isMine}) {
+    final followState = isMine
+        ? FollowState.following
+        : (ref.watch(followStateProvider(profile.id)).value ?? FollowState.none);
+    final locked = profile.isPrivate && !isMine && followState != FollowState.following;
+    return CustomScrollView(
+      slivers: [
+        CupertinoSliverRefreshControl(onRefresh: _refresh),
+        SliverToBoxAdapter(
+          child: _header(profile, isMine: isMine, followState: followState),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: CupertinoSlidingSegmentedControl<int>(
+              groupValue: _tab,
+              children: const {0: Text('Threads'), 1: Text('Replies'), 2: Text('Reposts')},
+              onValueChanged: (value) {
+                if (value != null) _selectTab(value);
+              },
+            ),
+          ),
+        ),
+        if (locked)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: Text(
+                  'This account is private. Follow it to see its posts.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                ),
+              ),
+            ),
+          ),
+        if (!locked) ..._postSlivers(profile.id),
+      ],
+    );
+  }
+  Widget _header(Profile profile, {required bool isMine, required FollowState followState}) {
+    final website = profile.website;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            profile.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (profile.isVerified) ...[
+                          const SizedBox(width: 6),
+                          const Icon(
+                            CupertinoIcons.checkmark_seal_fill,
+                            size: 18,
+                            color: CupertinoColors.activeBlue,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '@${profile.username}',
+                      style: const TextStyle(fontSize: 15, color: CupertinoColors.secondaryLabel),
+                    ),
+                  ],
+                ),
+              ),
+              Avatar(name: profile.name, url: profile.avatarUrl, size: 80),
+            ],
+          ),
+          if (profile.bio.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(profile.bio, style: const TextStyle(fontSize: 15)),
+          ],
+          if (website != null && website.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _openWebsite(website),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.link, size: 15, color: CupertinoColors.activeBlue),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      website,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, color: CupertinoColors.activeBlue),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => openScreen<void>(
+                  context,
+                  FollowListScreen(userId: profile.id, showFollowers: true),
+                ),
+                child: Text(
+                  '${compactCount(profile.followersCount)} followers',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: () => openScreen<void>(
+                  context,
+                  FollowListScreen(userId: profile.id, showFollowers: false),
+                ),
+                child: Text(
+                  '${compactCount(profile.followingCount)} following',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: AdaptiveButton.child(
+              onPressed: isMine
+                  ? () => _editProfile(profile)
+                  : () => _toggleFollow(profile, followState),
+              child: Text(isMine ? 'Edit profile' : _followLabel(followState)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  List<Widget> _postSlivers(String userId) {
+    final firstPage = ref.watch(profileTabProvider((userId, _tabName)));
+    final pinned = _tab == 0 ? ref.watch(pinnedThreadProvider(userId)).value : null;
+    return firstPage.when<List<Widget>>(
+      loading: () => const [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: CupertinoActivityIndicator()),
+        ),
+      ],
+      error: (error, _) => [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(child: Text(friendlyError(error))),
+        ),
+      ],
+      data: (page) {
+        final posts = [...page, ..._more].where((post) => !_gone.contains(post.id)).toList();
+        final rows = <Widget>[
+          if (pinned != null && !_gone.contains(pinned.id)) _row(pinned),
+          for (final post in posts) _row(post),
+        ];
+        if (rows.isEmpty) {
+          rows.add(
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'Nothing here yet.',
+                  style: TextStyle(color: CupertinoColors.secondaryLabel),
+                ),
+              ),
+            ),
+          );
+        }
+        if (!_endReached && posts.isNotEmpty) rows.add(_loadMoreRow(posts));
+        return [SliverList(delegate: SliverChildListDelegate(rows))];
+      },
+    );
+  }
+  Widget _row(ThreadPost post) {
+    return Column(
+      key: ValueKey(post.id),
+      children: [
+        ThreadCard(
+          post: _current(post),
+          onChanged: _changed,
+          onDeleted: () => setState(() => _gone.add(post.id)),
+        ),
+        Container(
+          height: 0.5,
+          margin: const EdgeInsets.only(left: 68),
+          color: CupertinoColors.separator,
+        ),
+      ],
+    );
+  }
+  Widget _loadMoreRow(List<ThreadPost> shown) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: _loadingMore
+            ? const CupertinoActivityIndicator()
+            : CupertinoButton(
+                onPressed: () => _loadMore(shown),
+                child: const Text('Load more'),
+              ),
+      ),
+    );
+  }
+}

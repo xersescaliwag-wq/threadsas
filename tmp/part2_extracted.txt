@@ -1,0 +1,2637 @@
+
+
+===== PAGE 1 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+ Threads Clone Guide, Part 2: Steps 13 to 21
+
+ Continues “Build a Threads Clone with Flutter, Supabase and adaptive_platform_ui”. The
+ same two rules apply: Cupertino and adaptive_platform_ui only, and Row Level Security on
+ every table.
+
+ Where this part picks up
+
+ Your PDF ends with the composer from Step 11. Reading through it, this is the state of the
+  project:
+
+    Steps 1 to 12 are complete, and Step 13 stops after profile_screen.dart .
+    profile_screen.dart imports edit_profile_screen.dart and
+    follow_list_screen.dart , which do not exist yet. This part creates both.
+    Steps 10 and 11 each appear twice in the PDF. Use the later copy of each. The later
+    composer is built as ComposeScreen({replyTo, quoting, editing}) .
+    main_shell.dart imports ActivityScreen , SearchScreen and SettingsScreen ,
+    and thread_card.dart imports TopicScreen . Steps 15 to 17 create them, so the app
+    compiles only when Step 17 is done.
+
+
+    File                                            Step
+
+   lib/screens/profile/edit_profile_screen.dart           13
+
+   lib/widgets/profile_row.dart,                         14
+   lib/widgets/small_button.dart
+
+   lib/screens/profile/follow_list_screen.dart,           14
+   follow_requests_screen.dart
+
+   lib/models/topic_hit.dart,                             15
+   lib/providers/search_providers.dart
+
+   lib/screens/search/search_screen.dart,               15
+   topic_screen.dart
+
+   lib/screens/activity/activity_screen.dart              16
+
+   lib/screens/settings/settings_screen.dart,             17
+   account_list_screen.dart
+
+
+
+
+
+                                                                                                                                     Page 1 of 49
+
+===== PAGE 2 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+    File                                            Step
+
+   lib/widgets/report_dialog.dart, profile_menu.dart      17
+
+
+ Step 13 (continued): Edit profile
+
+ The Edit profile button on the profile page opens this screen. It changes the photo, name,
+ username, bio, website and the private switch. The photo uploads only when the person
+ taps Save, so cancelling never leaves a stray file in Storage. The username is checked on
+ the device first, then for availability, and only when it actually changed.
+
+ Two details matter. The update grant from Step 2 allows exactly these columns: username,
+ display_name, bio, website, avatar_url and is_private. This screen therefore cannot touch
+ counters or the verified badge, even if the code were changed. Also, no trigger accepts
+ pending follow requests when an account turns public, so the screen accepts them itself
+  in that case. Without that, those people would stay on Requested for good.
+
+  lib/screens/profile/edit_profile_screen.dart
+
+   // lib/screens/profile/edit_profile_screen.dart
+   import 'dart:typed_data';
+
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:image_picker/image_picker.dart';
+   import 'package:threads_clone/core/config.dart';
+   import 'package:threads_clone/core/formatters.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/feed_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/widgets/avatar.dart';
+
+   class EditProfileScreen extends ConsumerStatefulWidget {
+     const EditProfileScreen({super.key, required this.profile});
+
+     final Profile profile;
+
+
+
+
+
+                                                                                                                                     Page 2 of 49
+
+===== PAGE 3 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     @override
+     ConsumerState<EditProfileScreen> createState() =>
+   _EditProfileScreenState();
+   }
+
+   class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
+     late final TextEditingController _name;
+     late final TextEditingController _username;
+     late final TextEditingController _bio;
+     late final TextEditingController _website;
+     late bool _isPrivate;
+     XFile? _newPhoto;
+     Uint8List? _photoPreview;
+     bool _busy = false;
+
+     @override
+     void initState() {
+       super.initState();
+       final profile = widget.profile;
+       _name = TextEditingController(text: profile.displayName);
+       _username = TextEditingController(text: profile.username);
+       _bio = TextEditingController(text: profile.bio);
+       _website = TextEditingController(text: profile.website ?? '');
+       _isPrivate = profile.isPrivate;
+     }
+
+     @override
+     void dispose() {
+       _name.dispose();
+       _username.dispose();
+       _bio.dispose();
+       _website.dispose();
+       super.dispose();
+     }
+
+     Future<void> _pickPhoto() async {
+       try {
+         // Resizing keeps the upload small and well under the 5 MB bucket
+   limit.
+         final file = await ImagePicker().pickImage(
+           source: ImageSource.gallery,
+           maxWidth: 1024,
+           maxHeight: 1024,
+
+
+
+
+
+                                                                                                                                     Page 3 of 49
+
+===== PAGE 4 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+           imageQuality: 85,
+         );
+         if (file == null) return;
+         final bytes = await file.readAsBytes();
+         if (!mounted) return;
+         setState(() {
+           _newPhoto = file;
+           _photoPreview = bytes;
+         });
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       }
+     }
+
+     /// Going public leaves old follow requests pending, because no trigger
+     /// accepts them. Accept them here. A failure is not fatal: the person can
+     /// still accept them later from Follow requests.
+     Future<void> _acceptPendingRequests() async {
+       try {
+         final social = ref.read(socialRepositoryProvider);
+         for (final request in await social.followRequests()) {
+           await social.acceptRequest(request.id);
+         }
+         ref.invalidate(followRequestsProvider);
+       } catch (_) {}
+     }
+
+     Future<void> _save() async {
+       if (_busy) return;
+       final username = _username.text.trim().toLowerCase();
+       final problem = validateUsername(username);
+       if (problem != null) {
+         await showMessage(context, 'Check your username', problem);
+         return;
+       }
+       setState(() => _busy = true);
+       try {
+         final changedName = username != widget.profile.username;
+         if (changedName && !await
+   ref.read(authRepositoryProvider).isUsernameAvailable(username)) {
+           if (mounted) await showMessage(context, 'Username taken', 'Choose
+   another username.');
+           return;
+
+
+
+
+
+                                                                                                                                     Page 4 of 49
+
+===== PAGE 5 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         }
+         final userId = widget.profile.id;
+         final photo = _newPhoto;
+         final avatarUrl = photo == null
+             ? null
+             : await ref.read(mediaRepositoryProvider).uploadAvatar(userId,
+   photo);
+         await ref.read(profileRepositoryProvider).updateProfile(
+               userId: userId,
+               username: username,
+               displayName: _name.text,
+               bio: _bio.text,
+               website: _website.text,
+               isPrivate: _isPrivate,
+               avatarUrl: avatarUrl,
+             );
+         if (widget.profile.isPrivate && !_isPrivate) await
+   _acceptPendingRequests();
+         ref.invalidate(myProfileProvider);
+         ref.invalidate(profileByIdProvider(userId));
+         // Posts on screen carry the old name and photo, so reload both feeds.
+         ref.invalidate(forYouFeedProvider);
+         ref.invalidate(followingFeedProvider);
+         if (mounted) Navigator.of(context).pop(true);
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       } finally {
+         if (mounted) setState(() => _busy = false);
+       }
+     }
+
+     Widget _label(String text) {
+       return Padding(
+         padding: const EdgeInsets.only(top: 16, bottom: 6),
+         child: Text(
+           text,
+           style: const TextStyle(
+             fontSize: 13,
+             fontWeight: FontWeight.w600,
+             color: CupertinoColors.secondaryLabel,
+           ),
+         ),
+       );
+
+
+
+
+
+                                                                                                                                     Page 5 of 49
+
+===== PAGE 6 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     }
+
+     Widget _photo() {
+       final preview = _photoPreview;
+       if (preview != null) {
+         return ClipOval(
+           child: Image.memory(preview, width: 96, height: 96, fit:
+   BoxFit.cover),
+         );
+       }
+       return Avatar(name: widget.profile.name, url: widget.profile.avatarUrl,
+   size: 96);
+     }
+
+     @override
+     Widget build(BuildContext context) {
+       // Leaving while the save runs would use a screen that no longer exists.
+       return PopScope(
+         canPop: !_busy,
+         child: AdaptiveScaffold(
+           appBar: AdaptiveAppBar(title: 'Edit profile'),
+           body: SafeArea(
+             child: ListView(
+               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+               children: [
+                 Center(
+                   child: GestureDetector(
+                     onTap: _busy ? null : _pickPhoto,
+                     child: Column(
+                       children: [
+                         _photo(),
+                         const SizedBox(height: 8),
+                         const Text(
+                           'Change photo',
+                           style: TextStyle(color: CupertinoColors.activeBlue),
+                         ),
+                       ],
+                     ),
+                   ),
+                 ),
+                 _label('Name'),
+                 AdaptiveTextField(
+                   controller: _name,
+
+
+
+
+
+                                                                                                                                     Page 6 of 49
+
+===== PAGE 7 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                   placeholder: 'Your name',
+                   maxLength: 50,
+                   textCapitalization: TextCapitalization.words,
+                   textInputAction: TextInputAction.next,
+                 ),
+                 _label('Username'),
+                 AdaptiveTextField(
+                   controller: _username,
+                   placeholder: 'username',
+                   autocorrect: false,
+                   textInputAction: TextInputAction.next,
+                 ),
+                 _label('Bio'),
+                 AdaptiveTextField(
+                   controller: _bio,
+                   placeholder: 'Tell people about yourself',
+                   minLines: 3,
+                   maxLines: 4,
+                   maxLength: maxBioLength,
+                   onChanged: (_) => setState(() {}),
+                 ),
+                 Align(
+                   alignment: Alignment.centerRight,
+                   child: Text(
+                     '${_bio.text.length}/$maxBioLength',
+                     style: const TextStyle(fontSize: 13, color:
+   CupertinoColors.secondaryLabel),
+                   ),
+                 ),
+                 _label('Website'),
+                 AdaptiveTextField(
+                   controller: _website,
+                   placeholder: 'example.com',
+                   keyboardType: TextInputType.url,
+                   autocorrect: false,
+                   maxLength: 200,
+                 ),
+                 const SizedBox(height: 20),
+                 Row(
+                   children: [
+                     const Expanded(
+                       child: Column(
+                         crossAxisAlignment: CrossAxisAlignment.start,
+
+
+
+
+
+                                                                                                                                     Page 7 of 49
+
+===== PAGE 8 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                         children: [
+                           Text('Private account', style: TextStyle(fontSize:
+   16, fontWeight: FontWeight.w600)),
+                           SizedBox(height: 2),
+                           Text(
+                             'New followers need your approval. People who
+   already follow you stay.',
+                             style: TextStyle(fontSize: 13, color:
+   CupertinoColors.secondaryLabel),
+                           ),
+                         ],
+                       ),
+                     ),
+                     const SizedBox(width: 12),
+                     CupertinoSwitch(
+                       value: _isPrivate,
+                       onChanged: _busy ? null : (value) => setState(() =>
+   _isPrivate = value),
+                     ),
+                   ],
+                 ),
+                 const SizedBox(height: 24),
+                 CupertinoButton.filled(
+                   onPressed: _busy ? null : _save,
+                   child: _busy ? const CupertinoActivityIndicator() : const
+   Text('Save'),
+                 ),
+               ],
+             ),
+           ),
+         ),
+       );
+     }
+   }
+
+ The screen returns true after a save, and the profile page reloads when it sees that. A
+ new photo goes to avatars/<user id>/avatar.<extension> , the folder the Step 2
+ storage policy allows. The upload adds a version number to the address, so image caches
+ do not keep showing the old photo.
+
+ Check it. Open your profile and tap Edit profile. Change the bio and pick a photo, then tap
+ Save. The profile shows both changes. Open the profiles table in the Supabase Table
+  Editor and look at your row: bio and avatar_url changed, and the follower counters did not.
+
+
+
+
+
+                                                                                                                                     Page 8 of 49
+
+===== PAGE 9 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+ Then try a username that already exists. The screen says it is taken and saves nothing.
+
+ Step 14: Follow, follow requests and follow lists
+
+ The Follow button and its three states (Follow, Following, Requested) are already in the
+  profile page from Step 13. This step builds the screens around them. The database does
+ the bookkeeping. Following a public account is accepted at once. Following a private
+ account creates a pending row, and the owner answers it. Accepting changes the row’s
+  status, declining deletes the row, and the counters follow by trigger.
+
+ Both lists and the request screen show people in the same way, so two small shared
+ widgets come first.
+
+  lib/widgets/profile_row.dart
+
+   // lib/widgets/profile_row.dart
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:threads_clone/core/navigation.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/screens/profile/profile_screen.dart';
+   import 'package:threads_clone/widgets/avatar.dart';
+
+   /// One person in a list. Tapping opens the profile unless onTap is given.
+   class ProfileRow extends StatelessWidget {
+     const ProfileRow({super.key, required this.profile, this.trailing,
+   this.onTap});
+
+     final Profile profile;
+     final Widget? trailing;
+     final VoidCallback? onTap;
+
+     @override
+     Widget build(BuildContext context) {
+       return GestureDetector(
+         behavior: HitTestBehavior.opaque,
+         onTap: onTap ?? () => openScreen<void>(context, ProfileScreen(userId:
+   profile.id)),
+         child: Padding(
+           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+           child: Row(
+             children: [
+
+
+
+
+
+                                                                                                                                     Page 9 of 49
+
+===== PAGE 10 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+               Avatar(name: profile.name, url: profile.avatarUrl, size: 44),
+               const SizedBox(width: 12),
+               Expanded(
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [
+                     Row(
+                       children: [
+                         Flexible(
+                           child: Text(
+                             profile.name,
+                             maxLines: 1,
+                             overflow: TextOverflow.ellipsis,
+                             style: const TextStyle(fontSize: 16, fontWeight:
+   FontWeight.w600),
+                           ),
+                         ),
+                         if (profile.isVerified) ...[
+                           const SizedBox(width: 4),
+                           const Icon(CupertinoIcons.checkmark_seal_fill, size:
+   14, color: CupertinoColors.activeBlue),
+                         ],
+                       ],
+                     ),
+                     Text(
+                       '@${profile.username}',
+                       style: const TextStyle(fontSize: 14, color:
+   CupertinoColors.secondaryLabel),
+                     ),
+                     if (profile.bio.isNotEmpty)
+                       Text(profile.bio, maxLines: 1, overflow:
+   TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                   ],
+                 ),
+               ),
+               if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+             ],
+           ),
+         ),
+       );
+     }
+   }
+
+
+
+
+
+                                                                                                                                    Page 10 of 49
+
+===== PAGE 11 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+  lib/widgets/small_button.dart is a compact pill button for list rows. CupertinoButton
+  is tall by default, and its size parameters differ between Flutter versions, so a plain
+ GestureDetector is the stable choice.
+
+   // lib/widgets/small_button.dart
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+
+   class SmallButton extends StatelessWidget {
+     const SmallButton({
+       super.key,
+       required this.label,
+       required this.onPressed,
+       this.filled = false,
+     });
+
+     final String label;
+     final VoidCallback? onPressed;
+     final bool filled;
+
+     @override
+     Widget build(BuildContext context) {
+       return Opacity(
+         opacity: onPressed == null ? 0.5 : 1,
+         child: GestureDetector(
+           onTap: onPressed,
+           child: Container(
+             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+             decoration: BoxDecoration(
+               color: filled ? CupertinoColors.activeBlue :
+   CupertinoColors.systemGrey5,
+               borderRadius: BorderRadius.circular(8),
+             ),
+             child: Text(
+               label,
+               style: TextStyle(
+                 fontSize: 14,
+                 fontWeight: FontWeight.w600,
+                 color: filled ? CupertinoColors.white : CupertinoColors.label,
+               ),
+             ),
+           ),
+
+
+
+
+
+                                                                                                                                    Page 11 of 49
+
+===== PAGE 12 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         ),
+       );
+     }
+   }
+
+  lib/screens/profile/follow_list_screen.dart shows followers or following,
+ depending on the flag. The providers come from Step 6.
+
+   // lib/screens/profile/follow_list_screen.dart
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/widgets/profile_row.dart';
+
+   class FollowListScreen extends ConsumerWidget {
+     const FollowListScreen({super.key, required this.userId, required
+   this.showFollowers});
+
+     final String userId;
+     final bool showFollowers;
+
+     @override
+     Widget build(BuildContext context, WidgetRef ref) {
+       final provider = showFollowers ? followersProvider(userId) :
+   followingListProvider(userId);
+       final people = ref.watch(provider);
+
+       Future<void> refresh() async {
+         ref.invalidate(provider);
+         await ref.read(provider.future);
+       }
+
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(title: showFollowers ? 'Followers' :
+   'Following'),
+         body: people.when<Widget>(
+           loading: () => const Center(child: CupertinoActivityIndicator()),
+           error: (error, _) => Center(child: Text(friendlyError(error))),
+           data: (list) {
+             if (list.isEmpty) {
+
+
+
+
+
+                                                                                                                                    Page 12 of 49
+
+===== PAGE 13 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+               return Center(
+                 child: Text(
+                   showFollowers ? 'No followers yet.' : 'Not following anyone
+   yet.',
+                   style: const TextStyle(color:
+   CupertinoColors.secondaryLabel),
+                 ),
+               );
+             }
+             return CustomScrollView(
+               slivers: [
+                 CupertinoSliverRefreshControl(onRefresh: refresh),
+                 SliverList(
+                   delegate: SliverChildBuilderDelegate(
+                     (context, index) => Column(
+                       children: [
+                         ProfileRow(profile: list[index]),
+                         Container(height: 0.5, margin: const
+   EdgeInsets.only(left: 72), color: CupertinoColors.separator),
+                       ],
+                     ),
+                     childCount: list.length,
+                   ),
+                 ),
+               ],
+             );
+           },
+         ),
+       );
+     }
+   }
+
+ The request screen is for private accounts. Confirm accepts, Delete declines. An
+ answered row leaves the list at once, and the screen keeps a local set of answered ids so
+ the list does not flash a spinner while it reloads.
+
+  lib/screens/profile/follow_requests_screen.dart
+
+   // lib/screens/profile/follow_requests_screen.dart
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+
+
+
+
+                                                                                                                                    Page 13 of 49
+
+===== PAGE 14 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/widgets/profile_row.dart';
+   import 'package:threads_clone/widgets/small_button.dart';
+
+   class FollowRequestsScreen extends ConsumerStatefulWidget {
+     const FollowRequestsScreen({super.key});
+
+     @override
+     ConsumerState<FollowRequestsScreen> createState() =>
+   _FollowRequestsScreenState();
+   }
+
+   class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen>
+   {
+     final Set<String> _answered = {};
+     final Set<String> _busy = {};
+
+     Future<void> _answer(Profile person, {required bool accept}) async {
+       if (_busy.contains(person.id)) return;
+       setState(() => _busy.add(person.id));
+       try {
+         final social = ref.read(socialRepositoryProvider);
+         if (accept) {
+           await social.acceptRequest(person.id);
+         } else {
+           await social.declineRequest(person.id);
+         }
+         _answered.add(person.id);
+         ref.invalidate(followRequestsProvider);
+         final me = ref.read(currentUserIdProvider);
+         // Accepting raises my follower count, so reload my profile.
+         if (accept && me != null) ref.invalidate(profileByIdProvider(me));
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       } finally {
+         if (mounted) setState(() => _busy.remove(person.id));
+       }
+     }
+
+
+
+
+
+                                                                                                                                    Page 14 of 49
+
+===== PAGE 15 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     Future<void> _refresh() async {
+       _answered.clear();
+       ref.invalidate(followRequestsProvider);
+       await ref.read(followRequestsProvider.future);
+     }
+
+     @override
+     Widget build(BuildContext context) {
+       final requests = ref.watch(followRequestsProvider);
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(title: 'Follow requests'),
+         body: requests.when<Widget>(
+           skipLoadingOnReload: true,
+           loading: () => const Center(child: CupertinoActivityIndicator()),
+           error: (error, _) => Center(child: Text(friendlyError(error))),
+           data: (all) {
+             final people = all.where((person) =>
+   !_answered.contains(person.id)).toList();
+             if (people.isEmpty) {
+               return const Center(
+                 child: Text('No pending requests.', style: TextStyle(color:
+   CupertinoColors.secondaryLabel)),
+               );
+             }
+             return CustomScrollView(
+               slivers: [
+                 CupertinoSliverRefreshControl(onRefresh: _refresh),
+                 SliverList(
+                   delegate: SliverChildBuilderDelegate(
+                     (context, index) {
+                       final person = people[index];
+                       final busy = _busy.contains(person.id);
+                       return Column(
+                         children: [
+                           ProfileRow(
+                             profile: person,
+                             trailing: Row(
+                               mainAxisSize: MainAxisSize.min,
+                               children: [
+                                 SmallButton(
+                                   label: 'Confirm',
+                                   filled: true,
+                                   onPressed: busy ? null : () =>
+
+
+
+
+
+                                                                                                                                    Page 15 of 49
+
+===== PAGE 16 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+   _answer(person, accept: true),
+                                 ),
+                                 const SizedBox(width: 8),
+                                 SmallButton(
+                                   label: 'Delete',
+                                   onPressed: busy ? null : () =>
+   _answer(person, accept: false),
+                                 ),
+                               ],
+                             ),
+                           ),
+                           Container(height: 0.5, margin: const
+   EdgeInsets.only(left: 72), color: CupertinoColors.separator),
+                         ],
+                       );
+                     },
+                     childCount: people.length,
+                   ),
+                 ),
+               ],
+             );
+           },
+         ),
+       );
+     }
+   }
+
+ The Activity tab (Step 16) and Settings (Step 17) both open this screen.
+
+ Check it. Use two accounts. Turn on Private account for the second one in Edit profile.
+ From the first account, open that profile and tap Follow. The button changes to
+ Requested, and the follower count stays at zero. On the second account, the request
+ appears in Follow requests. Tap Confirm. Now the first account shows Following after a
+  pull to refresh, and the follower count on the second profile is 1. Open the follows table in
+ the Table Editor and check that the row’s status changed from pending to accepted.
+
+ Step 15: Search, topics and hashtag pages
+
+ The Search tab has three modes. People matches names and usernames with the query
+ from Step 5. Threads uses the search_threads function from Step 2, which runs as the
+ signed-in user, so private accounts and blocked people stay out of the results. Topics
+
+
+
+
+
+                                                                                                                                    Page 16 of 49
+
+===== PAGE 17 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+ works differently. A hashtag is not a row in any table. It is an entry in the hashtags
+ column of a thread, which the Step 2 trigger fills in lowercase. A small new function lists
+ the topics that match what the person typed.
+
+ Typing waits 400 milliseconds after the last key before it searches, so a fast typist sends
+ one query instead of one per letter. Muted accounts are hidden from thread results, as
+ they are in the feeds. The Search tab sits inside the shell, so this screen draws no app bar
+ of its own.
+
+ The topic function
+
+ Open the SQL Editor in the Supabase dashboard, choose New query, and run this once. It
+ counts only threads the caller is allowed to see. An empty query returns the most used
+  topics, which the screen shows as Popular topics.
+
+   -- Step 15: topic suggestions. Runs as the caller, so RLS still applies.
+   create or replace function public.search_topics(q text)
+   returns table (tag text, uses bigint)
+   language sql stable security invoker set search_path = public as $$
+     select h.tag as tag, count(*) as uses
+     from public.threads t
+     cross join lateral unnest(t.hashtags) as h(tag)
+     where starts_with(h.tag, lower(regexp_replace(q, '[^A-Za-z0-9_]', '',
+   'g')))
+     group by h.tag
+     order by uses desc, h.tag
+     limit 20;
+   $$;
+
+
+ Model, repository method and providers
+
+  lib/models/topic_hit.dart
+
+   // lib/models/topic_hit.dart
+   /// A topic suggestion: the tag without the # and how many threads use it.
+   class TopicHit {
+     const TopicHit({required this.tag, required this.uses});
+
+     final String tag;
+     final int uses;
+   }
+
+
+
+
+
+                                                                                                                                    Page 17 of 49
+
+===== PAGE 18 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+  In lib/data/thread_repository.dart , add these two imports at the top, then add the
+ method inside ThreadRepository , under searchThreads .
+
+   import 'package:threads_clone/core/json.dart';
+   import 'package:threads_clone/models/topic_hit.dart';
+
+
+     /// Topics that start with the typed text. An empty query lists the most
+   used.
+     Future<List<TopicHit>> searchTopics(String query) async {
+       final rows = await _client.rpc('search_topics', params: {'q':
+   query.trim()});
+       return (rows as List).map((row) {
+         final map = row as Map<String, dynamic>;
+         return TopicHit(tag: map['tag'] as String, uses: asInt(map['uses']));
+       }).toList();
+     }
+
+  lib/providers/search_providers.dart keys each search by its text. The providers are
+  autoDispose , so old queries are not kept in memory.
+
+   // lib/providers/search_providers.dart
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/models/thread_post.dart';
+   import 'package:threads_clone/models/topic_hit.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+
+   final searchPeopleProvider = FutureProvider.autoDispose.family<List<Profile>,
+   String>((ref, query) {
+     return ref.watch(profileRepositoryProvider).search(query);
+   });
+
+   final searchThreadsProvider =
+   FutureProvider.autoDispose.family<List<ThreadPost>, String>((ref, query) {
+     return ref.watch(threadRepositoryProvider).searchThreads(query);
+   });
+
+   final searchTopicsProvider =
+   FutureProvider.autoDispose.family<List<TopicHit>, String>((ref, query) {
+     return ref.watch(threadRepositoryProvider).searchTopics(query);
+   });
+
+
+
+
+
+                                                                                                                                    Page 18 of 49
+
+===== PAGE 19 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+ The search screen
+
+  lib/screens/search/search_screen.dart
+
+   // lib/screens/search/search_screen.dart
+   import 'dart:async';
+
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/core/navigation.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/models/thread_post.dart';
+   import 'package:threads_clone/models/topic_hit.dart';
+   import 'package:threads_clone/providers/search_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/screens/search/topic_screen.dart';
+   import 'package:threads_clone/widgets/profile_row.dart';
+   import 'package:threads_clone/widgets/thread_card.dart';
+
+   class SearchScreen extends ConsumerStatefulWidget {
+     const SearchScreen({super.key});
+
+     @override
+     ConsumerState<SearchScreen> createState() => _SearchScreenState();
+   }
+
+   class _SearchScreenState extends ConsumerState<SearchScreen> {
+     final _controller = TextEditingController();
+     final Set<String> _gone = {};
+     Timer? _debounce;
+     String _query = '';
+     int _mode = 0; // 0 People, 1 Threads, 2 Topics
+
+     @override
+     void dispose() {
+       _debounce?.cancel();
+       _controller.dispose();
+       super.dispose();
+     }
+
+     /// Waits for a pause in typing, so each key press does not run a query.
+
+
+
+
+
+                                                                                                                                    Page 19 of 49
+
+===== PAGE 20 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     void _onChanged(String value) {
+       _debounce?.cancel();
+       _debounce = Timer(const Duration(milliseconds: 400), () {
+         if (mounted) setState(() => _query = value.trim());
+       });
+     }
+
+     void _onSubmitted(String value) {
+       _debounce?.cancel();
+       setState(() => _query = value.trim());
+     }
+
+     @override
+     Widget build(BuildContext context) {
+       return Column(
+         crossAxisAlignment: CrossAxisAlignment.stretch,
+         children: [
+           Padding(
+             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+             child: CupertinoSearchTextField(
+               controller: _controller,
+               placeholder: 'Search',
+               onChanged: _onChanged,
+               onSubmitted: _onSubmitted,
+             ),
+           ),
+           Padding(
+             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+             child: CupertinoSlidingSegmentedControl<int>(
+               groupValue: _mode,
+               children: const {0: Text('People'), 1: Text('Threads'), 2:
+   Text('Topics')},
+               onValueChanged: (value) {
+                 if (value != null) setState(() => _mode = value);
+               },
+             ),
+           ),
+           Expanded(child: _results()),
+         ],
+       );
+     }
+
+     Widget _results() {
+
+
+
+
+
+                                                                                                                                    Page 20 of 49
+
+===== PAGE 21 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+       if (_mode == 2) return _topics(_query);
+       if (_query.isEmpty) {
+         return _message(_mode == 0 ? 'Search for people by name or username.' :
+   'Search the text of threads.');
+       }
+       return _mode == 0 ? _people(_query) : _threads(_query);
+     }
+
+     Widget _message(String text) {
+       return Center(
+         child: Padding(
+           padding: const EdgeInsets.all(32),
+           child: Text(
+             text,
+             textAlign: TextAlign.center,
+             style: const TextStyle(color: CupertinoColors.secondaryLabel),
+           ),
+         ),
+       );
+     }
+
+     /// One list with a spinner, an error message, an empty message and
+   dividers.
+     Widget _list<T>(
+       AsyncValue<List<T>> value, {
+       required String empty,
+       required double indent,
+       required Widget Function(T item) row,
+     }) {
+       return value.when<Widget>(
+         loading: () => const Center(child: CupertinoActivityIndicator()),
+         error: (error, _) => _message(friendlyError(error)),
+         data: (items) {
+           if (items.isEmpty) return _message(empty);
+           return ListView.builder(
+             padding: EdgeInsets.zero,
+             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+             itemCount: items.length,
+             itemBuilder: (context, index) => Column(
+               children: [
+                 row(items[index]),
+                 Container(height: 0.5, margin: EdgeInsets.only(left: indent),
+   color: CupertinoColors.separator),
+
+
+
+
+
+                                                                                                                                    Page 21 of 49
+
+===== PAGE 22 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+               ],
+             ),
+           );
+         },
+       );
+     }
+
+     Widget _people(String query) {
+       return _list<Profile>(
+         ref.watch(searchPeopleProvider(query)),
+         empty: 'No people found.',
+         indent: 72,
+         row: (person) => ProfileRow(profile: person),
+       );
+     }
+
+     Widget _threads(String query) {
+       final muted = ref.watch(mutedIdsProvider).value ?? const <String>{};
+       final results = ref.watch(searchThreadsProvider(query)).whenData(
+             (posts) => [
+               for (final post in posts)
+                 if (!muted.contains(post.author.id) &&
+   !_gone.contains(post.id)) post,
+             ],
+           );
+       return _list<ThreadPost>(
+         results,
+         empty: 'No threads found.',
+         indent: 68,
+         // The card keeps its own copy after a like or a vote, so nothing to
+   store.
+         row: (post) => ThreadCard(
+           key: ValueKey(post.id),
+           post: post,
+           onChanged: (_) {},
+           onDeleted: () => setState(() => _gone.add(post.id)),
+         ),
+       );
+     }
+
+     Widget _topics(String query) {
+       final list = _list<TopicHit>(
+         ref.watch(searchTopicsProvider(query)),
+
+
+
+
+
+                                                                                                                                    Page 22 of 49
+
+===== PAGE 23 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         empty: query.isEmpty ? 'No topics yet.' : 'No topics start with that
+   text.',
+         indent: 16,
+         row: (hit) => GestureDetector(
+           behavior: HitTestBehavior.opaque,
+           onTap: () => openScreen<void>(context, TopicScreen(tag: hit.tag)),
+           child: Padding(
+             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+             child: Row(
+               children: [
+                 Expanded(
+                   child: Text('#${hit.tag}', style: const TextStyle(fontSize:
+   16, fontWeight: FontWeight.w600)),
+                 ),
+                 Text(
+                   '${hit.uses} ${hit.uses == 1 ? 'thread' : 'threads'}',
+                   style: const TextStyle(color:
+   CupertinoColors.secondaryLabel),
+                 ),
+                 const SizedBox(width: 6),
+                 const Icon(CupertinoIcons.chevron_forward, size: 16, color:
+   CupertinoColors.secondaryLabel),
+               ],
+             ),
+           ),
+         ),
+       );
+       if (query.isNotEmpty) return list;
+       return Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           const Padding(
+             padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+             child: Text(
+               'Popular topics',
+               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+   color: CupertinoColors.secondaryLabel),
+             ),
+           ),
+           Expanded(child: list),
+
+
+
+
+
+                                                                                                                                    Page 23 of 49
+
+===== PAGE 24 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         ],
+       );
+     }
+   }
+
+
+ The topic page
+
+ Tapping a #hashtag in any post, or a row in the Topics mode, opens this page. It lists top-
+  level threads that carry the hashtag, newest first, 20 at a time. Replies that use the
+ hashtag are not listed, because fetchTopic reads top-level posts only. The page follows
+ the same pattern as the profile tabs: local copies for changed cards, a Load more button,
+ and pull to refresh.
+
+  lib/screens/search/topic_screen.dart
+
+   // lib/screens/search/topic_screen.dart
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/models/thread_post.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/providers/thread_providers.dart';
+   import 'package:threads_clone/widgets/thread_card.dart';
+
+   const _pageSize = 20;
+
+   class TopicScreen extends ConsumerStatefulWidget {
+     const TopicScreen({super.key, required this.tag});
+
+     final String tag;
+
+     @override
+     ConsumerState<TopicScreen> createState() => _TopicScreenState();
+   }
+
+   class _TopicScreenState extends ConsumerState<TopicScreen> {
+     final Map<String, ThreadPost> _edits = {};
+     final Set<String> _gone = {};
+
+
+
+
+
+                                                                                                                                    Page 24 of 49
+
+===== PAGE 25 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     final List<ThreadPost> _more = [];
+     bool _endReached = false;
+     bool _loadingMore = false;
+
+     ThreadPost _current(ThreadPost post) => _edits[post.id] ?? post;
+
+     void _changed(ThreadPost post) => setState(() => _edits[post.id] = post);
+
+     Future<void> _refresh() async {
+       setState(() {
+         _more.clear();
+         _gone.clear();
+         _edits.clear();
+         _endReached = false;
+       });
+       ref.invalidate(topicProvider(widget.tag));
+       await ref.read(topicProvider(widget.tag).future);
+     }
+
+     /// Each page starts after the oldest post on screen.
+     Future<void> _loadMore(List<ThreadPost> all) async {
+       if (_loadingMore || _endReached || all.isEmpty) return;
+       setState(() => _loadingMore = true);
+       try {
+         final page = await ref.read(threadRepositoryProvider).fetchTopic(
+               widget.tag,
+               before: all.last.createdAt,
+             );
+         if (!mounted) return;
+         setState(() {
+           _more.addAll(page);
+           if (page.length < _pageSize) _endReached = true;
+         });
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       } finally {
+         if (mounted) setState(() => _loadingMore = false);
+       }
+     }
+
+     @override
+     Widget build(BuildContext context) {
+       final first = ref.watch(topicProvider(widget.tag));
+
+
+
+
+
+                                                                                                                                    Page 25 of 49
+
+===== PAGE 26 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+       final muted = ref.watch(mutedIdsProvider).value ?? const <String>{};
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(title: '#${widget.tag}'),
+         body: first.when<Widget>(
+           loading: () => const Center(child: CupertinoActivityIndicator()),
+           error: (error, _) => Center(child: Text(friendlyError(error))),
+           data: (page) {
+             final all = [...page, ..._more];
+             final posts = all
+                 .where((post) => !muted.contains(post.author.id) &&
+   !_gone.contains(post.id))
+                 .toList();
+             final hasMore = !_endReached && page.length >= _pageSize;
+             return CustomScrollView(
+               slivers: [
+                 CupertinoSliverRefreshControl(onRefresh: _refresh),
+                 if (posts.isEmpty)
+                   SliverFillRemaining(
+                     hasScrollBody: false,
+                     child: Center(
+                       child: Padding(
+                         padding: const EdgeInsets.all(32),
+                         child: Text(
+                           'No threads use #${widget.tag} yet.',
+                           textAlign: TextAlign.center,
+                           style: const TextStyle(color:
+   CupertinoColors.secondaryLabel),
+                         ),
+                       ),
+                     ),
+                   )
+                 else
+                   SliverList(
+                     delegate: SliverChildListDelegate([
+                       for (final post in posts)
+                         Column(
+                           key: ValueKey(post.id),
+                           children: [
+                             ThreadCard(
+                               post: _current(post),
+                               onChanged: _changed,
+                               onDeleted: () => setState(() =>
+   _gone.add(post.id)),
+
+
+
+
+
+                                                                                                                                    Page 26 of 49
+
+===== PAGE 27 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                             ),
+                             Container(height: 0.5, margin: const
+   EdgeInsets.only(left: 68), color: CupertinoColors.separator),
+                           ],
+                         ),
+                       if (hasMore)
+                         Padding(
+                           padding: const EdgeInsets.all(16),
+                           child: Center(
+                             child: _loadingMore
+                                 ? const CupertinoActivityIndicator()
+                                 : CupertinoButton(
+                                     onPressed: () => _loadMore(all),
+                                     child: const Text('Load more'),
+                                   ),
+                           ),
+                         ),
+                     ]),
+                   ),
+               ],
+             );
+           },
+         ),
+       );
+     }
+   }
+
+ Check it. Post a thread containing #flutter from one account. Open the Search tab,
+ choose Topics, and leave the box empty. Popular topics lists flutter with 1 thread. Type fl
+ and the same row stays. Tap it and the thread appears on the topic page. Switch to People,
+ type part of a username, and the account appears. Switch to Threads, type a word from
+ your post, and the post appears. Finally, tap a hashtag inside any post card. It opens the
+ same topic page.
+
+ Step 16: Activity: notifications with realtime
+
+ The Activity tab lists likes, replies, reposts, quotes, mentions, follows and follow requests.
+ The Step 2 triggers create each row, and the Step 6 realtime provider tells the shell when
+ one changes. The shell then reloads the list and the badge on the tab icon. Nothing in this
+ step writes a notification. The screen only reads them and marks them as read.
+
+
+
+
+
+                                                                                                                                    Page 27 of 49
+
+===== PAGE 28 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+ The design has three rules. First, opening the tab marks everything read, so the badge
+  clears. Second, rows that were new when the tab opened keep a blue dot and a grey
+ background until the person leaves the tab, so the person can still see what is new. Third,
+ a notification that arrives while the tab is open is marked read at once, so the badge does
+ not count something already on screen. For this the screen needs to know when its tab is
+  selected, so the shell passes a flag.
+
+ Two small changes to earlier files
+
+  In lib/screens/shell/main_shell.dart from Step 7, add a constant next to the other
+ tab constants:
+
+   const _activityTab = 3;
+
+ Then replace const ActivityScreen(), in the IndexedStack with:
+
+   ActivityScreen(isVisible: _tab == _activityTab),
+
+  In lib/data/notification_repository.dart from Step 5, change the end of list() .
+ When someone blocks you after they liked a post, the profile policy hides their profile
+ from you. The row then arrives with no actor, and the old code would fail on the whole list.
+ This version skips such rows.
+
+       // An actor who has since blocked you is hidden by the profile policy.
+       return rows
+           .where((row) => row['actor'] is Map<String, dynamic>)
+           .map((row) => AppNotification.fromJson(row))
+           .toList();
+
+
+ The activity screen
+
+ Tapping a row opens what it is about. A like, repost, reply, quote or mention opens the
+ thread page. For a reply, quote or mention the thread is the new post, and the thread page
+ shows the posts above it. A follow opens the person’s profile, and a follow request opens
+ the request screen from Step 14. When the account has pending requests, a Follow
+ requests row sits at the top of the list.
+
+  lib/screens/activity/activity_screen.dart
+
+
+
+
+
+                                                                                                                                    Page 28 of 49
+
+===== PAGE 29 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+   // lib/screens/activity/activity_screen.dart
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/core/formatters.dart';
+   import 'package:threads_clone/core/navigation.dart';
+   import 'package:threads_clone/models/app_notification.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/notification_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/screens/profile/follow_requests_screen.dart';
+   import 'package:threads_clone/screens/profile/profile_screen.dart';
+   import 'package:threads_clone/screens/thread/thread_detail_screen.dart';
+   import 'package:threads_clone/widgets/avatar.dart';
+
+   class ActivityScreen extends ConsumerStatefulWidget {
+     const ActivityScreen({super.key, this.isVisible = false});
+
+     /// True while the Activity tab is the selected tab. The shell passes it.
+     final bool isVisible;
+
+     @override
+     ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
+   }
+
+   class _ActivityScreenState extends ConsumerState<ActivityScreen> {
+     /// Rows that were unread when the person opened the tab. They keep their
+     /// highlight until the person leaves the tab.
+     final Set<String> _fresh = {};
+
+     @override
+     void didUpdateWidget(ActivityScreen oldWidget) {
+       super.didUpdateWidget(oldWidget);
+       if (widget.isVisible && !oldWidget.isVisible) {
+         _markRead(ref.read(activityProvider).value ?? const []);
+       } else if (!widget.isVisible && oldWidget.isVisible) {
+         _fresh.clear();
+       }
+     }
+
+     /// Remembers which rows are new, then marks every row read in the
+
+
+
+
+
+                                                                                                                                    Page 29 of 49
+
+===== PAGE 30 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+   database.
+     void _markRead(List<AppNotification> items) {
+       final unread = items.where((item) => !item.isRead).toList();
+       if (unread.isEmpty) return;
+       _fresh.addAll(unread.map((item) => item.id));
+       _saveRead();
+     }
+
+     Future<void> _saveRead() async {
+       try {
+         await ref.read(notificationRepositoryProvider).markAllRead();
+         ref.invalidate(unreadCountProvider);
+       } catch (_) {
+         // The badge corrects itself on the next realtime event.
+       }
+     }
+
+     Future<void> _refresh() async {
+       ref.invalidate(followRequestsProvider);
+       ref.invalidate(activityProvider);
+       await ref.read(activityProvider.future);
+     }
+
+     void _open(AppNotification item) {
+       switch (item.type) {
+         case NotificationType.follow:
+           openScreen<void>(context, ProfileScreen(userId: item.actor.id));
+         case NotificationType.followRequest:
+           openScreen<void>(context, const FollowRequestsScreen());
+         default:
+           final threadId = item.threadId;
+           if (threadId != null) {
+             openScreen<void>(context, ThreadDetailScreen(threadId: threadId));
+           }
+       }
+     }
+
+     String _verb(NotificationType type) => switch (type) {
+           NotificationType.like => 'liked your thread',
+           NotificationType.reply => 'replied to your thread',
+           NotificationType.repost => 'reposted your thread',
+           NotificationType.quote => 'quoted your thread',
+           NotificationType.mention => 'mentioned you',
+
+
+
+
+
+                                                                                                                                    Page 30 of 49
+
+===== PAGE 31 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+           NotificationType.follow => 'started following you',
+           NotificationType.followRequest => 'asked to follow you',
+         };
+
+     IconData _icon(NotificationType type) => switch (type) {
+           NotificationType.like => CupertinoIcons.heart_fill,
+           NotificationType.reply => CupertinoIcons.chat_bubble_fill,
+           NotificationType.repost => CupertinoIcons.arrow_2_squarepath,
+           NotificationType.quote => CupertinoIcons.quote_bubble_fill,
+           NotificationType.mention => CupertinoIcons.at,
+           NotificationType.follow => CupertinoIcons.person_fill,
+           NotificationType.followRequest =>
+   CupertinoIcons.person_badge_plus_fill,
+         };
+
+     Color _color(NotificationType type) => switch (type) {
+           NotificationType.like => CupertinoColors.systemRed,
+           NotificationType.reply => CupertinoColors.systemBlue,
+           NotificationType.repost => CupertinoColors.systemGreen,
+           NotificationType.quote => CupertinoColors.systemPurple,
+           NotificationType.mention => CupertinoColors.systemOrange,
+           NotificationType.follow || NotificationType.followRequest =>
+   CupertinoColors.systemIndigo,
+         };
+
+     @override
+     Widget build(BuildContext context) {
+       // A realtime event reloads the list. If the tab is open, the new rows
+   are
+       // marked read straight away.
+       ref.listen(activityProvider, (previous, next) {
+         ref.invalidate(followRequestsProvider);
+         if (next.isLoading || !widget.isVisible) return;
+         final items = next.value;
+         if (items != null) setState(() => _markRead(items));
+       });
+
+       final activity = ref.watch(activityProvider);
+       final requests = ref.watch(followRequestsProvider).value ?? const
+   <Profile>[];
+
+       // skipLoadingOnReload keeps the rows on screen while a realtime reload
+   runs.
+
+
+
+
+
+                                                                                                                                    Page 31 of 49
+
+===== PAGE 32 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+       return activity.when<Widget>(
+         skipLoadingOnReload: true,
+         loading: () => const Center(child: CupertinoActivityIndicator()),
+         error: (error, _) => Center(child: Text(friendlyError(error))),
+         data: (items) => CustomScrollView(
+           slivers: [
+             CupertinoSliverRefreshControl(onRefresh: _refresh),
+             if (requests.isNotEmpty) SliverToBoxAdapter(child:
+   _requestsRow(requests.length)),
+             if (items.isEmpty)
+               const SliverFillRemaining(
+                 hasScrollBody: false,
+                 child: Center(
+                   child: Text('No activity yet.', style: TextStyle(color:
+   CupertinoColors.secondaryLabel)),
+                 ),
+               )
+             else
+               SliverList(
+                 delegate: SliverChildBuilderDelegate(
+                   (context, index) => Column(
+                     children: [
+                       _row(items[index]),
+                       Container(height: 0.5, margin: const
+   EdgeInsets.only(left: 74), color: CupertinoColors.separator),
+                     ],
+                   ),
+                   childCount: items.length,
+                 ),
+               ),
+           ],
+         ),
+       );
+     }
+
+     Widget _requestsRow(int count) {
+       return GestureDetector(
+         behavior: HitTestBehavior.opaque,
+         onTap: () => openScreen<void>(context, const FollowRequestsScreen()),
+         child: Container(
+           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+           decoration: const BoxDecoration(
+             border: Border(bottom: BorderSide(color: CupertinoColors.separator,
+
+
+
+
+
+                                                                                                                                    Page 32 of 49
+
+===== PAGE 33 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+   width: 0.5)),
+           ),
+           child: Row(
+             children: [
+               const Icon(CupertinoIcons.person_2_fill, size: 22),
+               const SizedBox(width: 12),
+               const Expanded(
+                 child: Text('Follow requests', style: TextStyle(fontSize: 16,
+   fontWeight: FontWeight.w600)),
+               ),
+               Text('$count', style: const TextStyle(color:
+   CupertinoColors.secondaryLabel)),
+               const SizedBox(width: 6),
+               const Icon(CupertinoIcons.chevron_forward, size: 16, color:
+   CupertinoColors.secondaryLabel),
+             ],
+           ),
+         ),
+       );
+     }
+
+     Widget _badge(NotificationType type) {
+       return Container(
+         width: 20,
+         height: 20,
+         decoration: BoxDecoration(
+           color: _color(type),
+           shape: BoxShape.circle,
+           border: Border.all(color: CupertinoColors.systemBackground, width:
+   2),
+         ),
+         child: Icon(_icon(type), size: 11, color: CupertinoColors.white),
+       );
+     }
+
+     Widget _row(AppNotification item) {
+       final isFresh = _fresh.contains(item.id);
+       final preview = item.threadPreview;
+       return GestureDetector(
+         behavior: HitTestBehavior.opaque,
+         onTap: () => _open(item),
+         child: Container(
+           color: isFresh ? CupertinoColors.systemGrey6 : null,
+
+
+
+
+
+                                                                                                                                    Page 33 of 49
+
+===== PAGE 34 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+           child: Row(
+             crossAxisAlignment: CrossAxisAlignment.start,
+             children: [
+               Stack(
+                 clipBehavior: Clip.none,
+                 children: [
+                   Avatar(name: item.actor.name, url: item.actor.avatarUrl,
+   size: 44),
+                   Positioned(right: -4, bottom: -4, child: _badge(item.type)),
+                 ],
+               ),
+               const SizedBox(width: 14),
+               Expanded(
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [
+                     Row(
+                       children: [
+                         Flexible(
+                           child: Text(
+                             item.actor.name,
+                             maxLines: 1,
+                             overflow: TextOverflow.ellipsis,
+                             style: const TextStyle(fontSize: 15, fontWeight:
+   FontWeight.w600),
+                           ),
+                         ),
+                         const SizedBox(width: 6),
+                         Text(
+                           timeAgo(item.createdAt),
+                           style: const TextStyle(fontSize: 14, color:
+   CupertinoColors.secondaryLabel),
+                         ),
+                       ],
+                     ),
+                     Text(_verb(item.type), style: const TextStyle(fontSize:
+   15)),
+                     if (preview != null && preview.isNotEmpty)
+                       Padding(
+                         padding: const EdgeInsets.only(top: 4),
+                         child: Text(
+                           preview,
+
+
+
+
+
+                                                                                                                                    Page 34 of 49
+
+===== PAGE 35 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                           maxLines: 2,
+                           overflow: TextOverflow.ellipsis,
+                           style: const TextStyle(fontSize: 14, color:
+   CupertinoColors.secondaryLabel),
+                         ),
+                       ),
+                   ],
+                 ),
+               ),
+               if (isFresh)
+                 Container(
+                   margin: const EdgeInsets.only(left: 8, top: 6),
+                   width: 9,
+                   height: 9,
+                   decoration: const BoxDecoration(color:
+   CupertinoColors.activeBlue, shape: BoxShape.circle),
+                 ),
+             ],
+           ),
+         ),
+       );
+     }
+   }
+
+ The realtime stream only signals that something changed. The screen then reads the list
+ through the normal query, so row-level security and the profile embeds apply in one place.
+ Realtime also needs the notifications table in the supabase_realtime publication,
+ which Part C of Step 2 already did.
+
+ Check it. Use two accounts on two devices or simulators. From the second account, like a
+ post of the first. Within a second or two the first account’s Activity icon shows a badge of
+  1, with no refresh. Open the tab. The new row is grey with a blue dot, and the badge clears.
+ Leave the tab and come back, and the dot is gone. Then reply from the second account
+ while the first stays on the Activity tab. The row appears with its dot, and the badge stays
+  at zero. Finally, tap the reply row and check that the thread page opens with the original
+ post above it.
+
+
+
+
+
+                                                                                                                                    Page 35 of 49
+
+===== PAGE 36 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+ Step 17: Settings, block, mute, report and delete account
+
+ Thread menus already let a person mute, block or report the author of a post (Step 10).
+ This step adds the rest of the safety tools: the same actions on a profile, the lists where
+ blocks and mutes are undone, and the Settings screen with log out and account deletion.
+
+ The rules behind them are all in the database. Blocking removes any follow between the
+ two people in both directions, and each side stops seeing the other’s threads. Unblocking
+ does not bring the follows back. Muting only hides the person from your own feeds, and
+ the other person is never told. Reports go into the reports table, and only you can read
+ the ones you filed.
+
+ Deleting an account is the one step the database cannot finish alone. The
+  delete_my_account function from Step 2 removes the user, and the profile, threads, likes
+ and follows go with it by cascade. Files in Storage are not part of that cascade, so the app
+ deletes the person’s uploads first.
+
+ Delete uploaded files
+
+ Add this method inside MediaRepository in lib/data/media_repository.dart , under
+  uploadThreadMedia . The storage policy from Step 2 allows a person to delete inside their
+ own folder, so this needs no new policy.
+
+     /// Removes every file this user uploaded. Run it before the account is
+     /// deleted, because the database cascade does not touch Storage.
+     Future<void> deleteAllMine(String userId) async {
+       for (final name in const [_avatarBucket, _threadBucket]) {
+         final bucket = _client.storage.from(name);
+         // A list call returns up to 100 files, so repeat until the folder is
+   empty.
+         for (var round = 0; round < 50; round++) {
+           final files = await bucket.list(path: userId);
+           if (files.isEmpty) break;
+           await bucket.remove([for (final file in files)
+   '$userId/${file.name}']);
+           if (files.length < 100) break;
+         }
+       }
+     }
+
+
+
+
+
+                                                                                                                                    Page 36 of 49
+
+===== PAGE 37 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+ The report dialog and the profile menu
+
+ The thread menu keeps its own private report dialog. This public one takes a title, so the
+  profile menu can reuse it.
+
+  lib/widgets/report_dialog.dart
+
+   // lib/widgets/report_dialog.dart
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+
+   /// Asks why something is being reported. Returns the trimmed reason, or null
+   /// when the person cancels. The database accepts 3 to 500 characters.
+   Future<String?> askReportReason(BuildContext context, {required String
+   title}) {
+     final controller = TextEditingController();
+     return showCupertinoDialog<String>(
+       context: context,
+       builder: (dialogContext) => CupertinoAlertDialog(
+         title: Text(title),
+         content: Padding(
+           padding: const EdgeInsets.only(top: 12),
+           child: CupertinoTextField(
+             controller: controller,
+             placeholder: 'What is wrong?',
+             maxLines: 3,
+             maxLength: 500,
+           ),
+         ),
+         actions: [
+           CupertinoDialogAction(
+             onPressed: () => Navigator.of(dialogContext).pop(),
+             child: const Text('Cancel'),
+           ),
+           CupertinoDialogAction(
+             isDefaultAction: true,
+             onPressed: () =>
+   Navigator.of(dialogContext).pop(controller.text.trim()),
+             child: const Text('Send'),
+           ),
+
+
+
+
+
+                                                                                                                                    Page 37 of 49
+
+===== PAGE 38 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         ],
+       ),
+     ).whenComplete(controller.dispose);
+   }
+
+  lib/widgets/profile_menu.dart is the ... menu for someone else’s profile. It offers mute
+  (or unmute), block and report. Blocking asks first, then closes the profile page, because
+ there is nothing more to see there.
+
+   // lib/widgets/profile_menu.dart
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/feed_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/widgets/report_dialog.dart';
+
+   /// The ... menu on someone else's profile: mute, block and report.
+   Future<void> showProfileMenu(
+     BuildContext context, {
+     required WidgetRef ref,
+     required Profile profile,
+   }) async {
+     var isMuted = false;
+     try {
+       isMuted = (await ref.read(mutedIdsProvider.future)).contains(profile.id);
+     } catch (_) {}
+     if (!context.mounted) return;
+
+     final choice = await showCupertinoModalPopup<String>(
+       context: context,
+       builder: (sheetContext) => CupertinoActionSheet(
+         actions: [
+           _action(sheetContext, 'mute', isMuted ? 'Unmute @${profile.username}'
+   : 'Mute @${profile.username}'),
+           _action(sheetContext, 'block', 'Block @${profile.username}',
+   destructive: true),
+           _action(sheetContext, 'report', 'Report @${profile.username}'),
+         ],
+         cancelButton: CupertinoActionSheetAction(
+
+
+
+
+
+                                                                                                                                    Page 38 of 49
+
+===== PAGE 39 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+           isDefaultAction: true,
+           onPressed: () => Navigator.of(sheetContext).pop(),
+           child: const Text('Cancel'),
+         ),
+       ),
+     );
+     if (choice == null || !context.mounted) return;
+
+     if (choice == 'mute') {
+       await _run(context, () => _toggleMute(context, ref, profile, isMuted));
+     } else if (choice == 'block') {
+       await _confirmBlock(context, ref, profile);
+     } else if (choice == 'report') {
+       await _report(context, ref, profile);
+     }
+   }
+
+   CupertinoActionSheetAction _action(
+     BuildContext context,
+     String value,
+     String label, {
+     bool destructive = false,
+   }) {
+     return CupertinoActionSheetAction(
+       isDestructiveAction: destructive,
+       onPressed: () => Navigator.of(context).pop(value),
+       child: Text(label),
+     );
+   }
+
+   /// Runs one task and shows any error in plain language.
+   Future<void> _run(BuildContext context, Future<void> Function() task) async {
+     try {
+       await task();
+     } catch (error) {
+       if (context.mounted) await showError(context, error);
+     }
+   }
+
+   void _refreshFeeds(WidgetRef ref) {
+     ref.invalidate(forYouFeedProvider);
+     ref.invalidate(followingFeedProvider);
+   }
+
+
+
+
+
+                                                                                                                                    Page 39 of 49
+
+===== PAGE 40 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+   Future<void> _toggleMute(
+     BuildContext context,
+     WidgetRef ref,
+     Profile profile,
+     bool isMuted,
+   ) async {
+     final social = ref.read(socialRepositoryProvider);
+     if (isMuted) {
+       await social.unmute(profile.id);
+     } else {
+       await social.mute(profile.id);
+     }
+     ref.invalidate(mutedIdsProvider);
+     ref.invalidate(mutedProfilesProvider);
+     _refreshFeeds(ref);
+     if (!context.mounted) return;
+     await showMessage(
+       context,
+       isMuted ? 'Unmuted' : 'Muted',
+       isMuted
+           ? 'You will see @${profile.username} in your feeds again.'
+           : 'Threads from @${profile.username} no longer appear in your feeds.
+   They are not told.',
+     );
+   }
+
+   Future<void> _confirmBlock(BuildContext context, WidgetRef ref, Profile
+   profile) async {
+     final sure = await confirm(
+       context,
+       title: 'Block @${profile.username}?',
+       message: 'They cannot see your threads or follow you, and you cannot see
+   theirs.',
+       actionLabel: 'Block',
+       destructive: true,
+     );
+     if (!sure || !context.mounted) return;
+     await _run(context, () async {
+       await ref.read(socialRepositoryProvider).block(profile.id);
+       ref.invalidate(followStateProvider(profile.id));
+       ref.invalidate(profileByIdProvider(profile.id));
+       ref.invalidate(blockedProfilesProvider);
+
+
+
+
+
+                                                                                                                                    Page 40 of 49
+
+===== PAGE 41 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+       _refreshFeeds(ref);
+       if (context.mounted) Navigator.of(context).pop();
+     });
+   }
+
+   Future<void> _report(BuildContext context, WidgetRef ref, Profile profile)
+   async {
+     final reason = await askReportReason(context, title: 'Report
+   @${profile.username}');
+     if (reason == null || !context.mounted) return;
+     if (reason.length < 3) {
+       await showMessage(context, 'Add a reason', 'Write at least three
+   characters.');
+       return;
+     }
+     await _run(context, () async {
+       await ref.read(socialRepositoryProvider).reportProfile(profile.id,
+   reason);
+       if (context.mounted) await showMessage(context, 'Thanks', 'We will review
+   this account.');
+     });
+   }
+
+ Now connect it to the profile page. In lib/screens/profile/profile_screen.dart , add
+  this import:
+
+   import 'package:threads_clone/widgets/profile_menu.dart';
+
+ Then replace the end of the build method, from if (!widget.showAppBar) return
+ body; down to the closing brace of the method, with this. Your own profile gets no menu.
+ Another person’s profile gets the ... button once it has loaded.
+
+
+
+
+
+                                                                                                                                    Page 41 of 49
+
+===== PAGE 42 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+       if (!widget.showAppBar) return body;
+       final loaded = profileAsync.value;
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(
+           title: loaded?.username ?? 'Profile',
+           actions: [
+             if (loaded != null && loaded.id != me)
+               AdaptiveAppBarAction(
+                 iosSymbol: 'ellipsis',
+                 icon: CupertinoIcons.ellipsis,
+                 onPressed: () => showProfileMenu(context, ref: ref, profile:
+   loaded),
+               ),
+           ],
+         ),
+         body: body,
+       );
+     }
+
+
+ Blocked and muted lists
+
+ Both lists look the same and differ only in the provider and the action, so one screen
+ serves both. Undoing an action removes the row at once, then reloads both feeds so the
+ person’s threads come back.
+
+  lib/screens/settings/account_list_screen.dart
+
+   // lib/screens/settings/account_list_screen.dart
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/errors.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/models/profile.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/providers/feed_providers.dart';
+   import 'package:threads_clone/providers/social_providers.dart';
+   import 'package:threads_clone/widgets/profile_row.dart';
+   import 'package:threads_clone/widgets/small_button.dart';
+
+   enum AccountListKind { blocked, muted }
+
+
+
+
+
+                                                                                                                                    Page 42 of 49
+
+===== PAGE 43 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+   class AccountListScreen extends ConsumerStatefulWidget {
+     const AccountListScreen({super.key, required this.kind});
+
+     final AccountListKind kind;
+
+     @override
+     ConsumerState<AccountListScreen> createState() =>
+   _AccountListScreenState();
+   }
+
+   class _AccountListScreenState extends ConsumerState<AccountListScreen> {
+     final Set<String> _removed = {};
+     final Set<String> _busy = {};
+
+     bool get _isBlocked => widget.kind == AccountListKind.blocked;
+
+     Future<void> _undo(Profile person) async {
+       if (_busy.contains(person.id)) return;
+       setState(() => _busy.add(person.id));
+       try {
+         final social = ref.read(socialRepositoryProvider);
+         if (_isBlocked) {
+           await social.unblock(person.id);
+           ref.invalidate(blockedProfilesProvider);
+           ref.invalidate(followStateProvider(person.id));
+           ref.invalidate(profileByIdProvider(person.id));
+         } else {
+           await social.unmute(person.id);
+           ref.invalidate(mutedProfilesProvider);
+           ref.invalidate(mutedIdsProvider);
+         }
+         ref.invalidate(forYouFeedProvider);
+         ref.invalidate(followingFeedProvider);
+         if (mounted) setState(() => _removed.add(person.id));
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       } finally {
+         if (mounted) setState(() => _busy.remove(person.id));
+       }
+     }
+
+     @override
+
+
+
+
+
+                                                                                                                                    Page 43 of 49
+
+===== PAGE 44 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+     Widget build(BuildContext context) {
+       final people = _isBlocked ? ref.watch(blockedProfilesProvider) :
+   ref.watch(mutedProfilesProvider);
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(title: _isBlocked ? 'Blocked accounts' : 'Muted
+   accounts'),
+         body: people.when<Widget>(
+           skipLoadingOnReload: true,
+           loading: () => const Center(child: CupertinoActivityIndicator()),
+           error: (error, _) => Center(child: Text(friendlyError(error))),
+           data: (all) {
+             final list = all.where((person) =>
+   !_removed.contains(person.id)).toList();
+             if (list.isEmpty) {
+               return Center(
+                 child: Text(
+                   _isBlocked ? 'You have not blocked anyone.' : 'You have not
+   muted anyone.',
+                   style: const TextStyle(color:
+   CupertinoColors.secondaryLabel),
+                 ),
+               );
+             }
+             return ListView(
+               children: [
+                 Padding(
+                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                   child: Text(
+                     _isBlocked
+                         ? 'Blocked accounts cannot see your threads or follow
+   you. Unblocking does not bring old follows back.'
+                         : 'Threads from muted accounts stay out of your feeds.
+   They are not told.',
+                     style: const TextStyle(fontSize: 13, color:
+   CupertinoColors.secondaryLabel),
+                   ),
+                 ),
+                 for (final person in list)
+                   Column(
+                     children: [
+                       ProfileRow(
+                         profile: person,
+                         trailing: SmallButton(
+
+
+
+
+
+                                                                                                                                    Page 44 of 49
+
+===== PAGE 45 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                           label: _isBlocked ? 'Unblock' : 'Unmute',
+                           onPressed: _busy.contains(person.id) ? null : () =>
+   _undo(person),
+                         ),
+                       ),
+                       Container(height: 0.5, margin: const
+   EdgeInsets.only(left: 72), color: CupertinoColors.separator),
+                     ],
+                   ),
+               ],
+             );
+           },
+         ),
+       );
+     }
+   }
+
+
+ The Settings screen
+
+ The gear button on the Profile tab (Step 7) opens this screen. Log out and delete both
+  finish by returning to the first route. The auth gate has already swapped the home screen
+ to the login screen by then, so popUntil only closes the Settings screen on top of it.
+ Delete asks twice, then removes the files, then the account.
+
+  lib/screens/settings/settings_screen.dart
+
+   // lib/screens/settings/settings_screen.dart
+   import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+   import 'package:flutter/cupertino.dart';
+   import 'package:flutter/widgets.dart';
+   import 'package:flutter_riverpod/flutter_riverpod.dart';
+   import 'package:threads_clone/core/messages.dart';
+   import 'package:threads_clone/core/navigation.dart';
+   import 'package:threads_clone/providers/core_providers.dart';
+   import 'package:threads_clone/screens/profile/follow_requests_screen.dart';
+   import 'package:threads_clone/screens/settings/account_list_screen.dart';
+
+   class SettingsScreen extends ConsumerStatefulWidget {
+     const SettingsScreen({super.key});
+
+     @override
+     ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+   }
+
+
+
+
+
+                                                                                                                                    Page 45 of 49
+
+===== PAGE 46 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+
+   class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+     bool _busy = false;
+
+     /// Runs one task with the screen locked, and shows any error.
+     Future<void> _run(Future<void> Function() task) async {
+       if (_busy) return;
+       setState(() => _busy = true);
+       try {
+         await task();
+       } catch (error) {
+         if (mounted) await showError(context, error);
+       } finally {
+         if (mounted) setState(() => _busy = false);
+       }
+     }
+
+     Future<void> _logOut() async {
+       final sure = await confirm(
+         context,
+         title: 'Log out?',
+         message: 'You can log back in at any time.',
+         actionLabel: 'Log out',
+       );
+       if (!sure || !mounted) return;
+       final navigator = Navigator.of(context);
+       await _run(() async {
+         await ref.read(authRepositoryProvider).logOut();
+         navigator.popUntil((route) => route.isFirst);
+       });
+     }
+
+     Future<void> _deleteAccount() async {
+       final first = await confirm(
+         context,
+         title: 'Delete your account?',
+         message: 'Your profile, threads, replies, likes and uploaded photos are
+   deleted for good.',
+         actionLabel: 'Continue',
+         destructive: true,
+       );
+       if (!first || !mounted) return;
+       final second = await confirm(
+
+
+
+
+
+                                                                                                                                    Page 46 of 49
+
+===== PAGE 47 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+         context,
+         title: 'This cannot be undone',
+         message: 'Delete your account now?',
+         actionLabel: 'Delete account',
+         destructive: true,
+       );
+       if (!second || !mounted) return;
+       final userId = ref.read(currentUserIdProvider);
+       final navigator = Navigator.of(context);
+       await _run(() async {
+         // Files first: once the user row is gone, the storage policy no longer
+   matches.
+         if (userId != null) await
+   ref.read(mediaRepositoryProvider).deleteAllMine(userId);
+         await ref.read(authRepositoryProvider).deleteAccount();
+         navigator.popUntil((route) => route.isFirst);
+       });
+     }
+
+     CupertinoListTile _tile(IconData icon, String title, VoidCallback onTap) {
+       return CupertinoListTile(
+         leading: Icon(icon),
+         title: Text(title),
+         trailing: const CupertinoListTileChevron(),
+         onTap: onTap,
+       );
+     }
+
+     @override
+     Widget build(BuildContext context) {
+       final email = ref.watch(supabaseClientProvider).auth.currentUser?.email;
+       return AdaptiveScaffold(
+         appBar: AdaptiveAppBar(title: 'Settings'),
+         body: Stack(
+           children: [
+             IgnorePointer(
+               ignoring: _busy,
+               child: Opacity(
+                 opacity: _busy ? 0.5 : 1,
+                 child: ListView(
+                   children: [
+                     CupertinoListSection.insetGrouped(
+                       header: const Text('Privacy'),
+
+
+
+
+
+                                                                                                                                    Page 47 of 49
+
+===== PAGE 48 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+                       footer: const Text('To make your account private, use
+   Edit profile on your profile page.'),
+                       children: [
+                         _tile(
+                           CupertinoIcons.person_badge_plus,
+                           'Follow requests',
+                           () => openScreen<void>(context, const
+   FollowRequestsScreen()),
+                         ),
+                         _tile(
+                           CupertinoIcons.hand_raised,
+                           'Blocked accounts',
+                           () => openScreen<void>(context, const
+   AccountListScreen(kind: AccountListKind.blocked)),
+                         ),
+                         _tile(
+                           CupertinoIcons.speaker_slash,
+                           'Muted accounts',
+                           () => openScreen<void>(context, const
+   AccountListScreen(kind: AccountListKind.muted)),
+                         ),
+                       ],
+                     ),
+                     CupertinoListSection.insetGrouped(
+                       header: const Text('Account'),
+                       footer: email == null ? null : Text('Signed in as
+   $email'),
+                       children: [
+                         CupertinoListTile(title: const Text('Log out'), onTap:
+   _logOut),
+                         CupertinoListTile(
+                           title: const Text('Delete account', style:
+   TextStyle(color: CupertinoColors.systemRed)),
+                           onTap: _deleteAccount,
+                         ),
+                       ],
+                     ),
+                   ],
+                 ),
+               ),
+             ),
+             if (_busy) const Center(child: CupertinoActivityIndicator(radius:
+   14)),
+
+
+
+
+
+                                                                                                                                    Page 48 of 49
+
+===== PAGE 49 =====
+
+Threads Clone Guide, Part 2: Steps 13 to 21
+
+
+           ],
+         ),
+       );
+     }
+   }
+
+
+ Build the app for the first time
+
+ Every file that the earlier steps import now exists. From the project root, run these in
+  order. The second command should print nothing.
+
+   flutter pub get
+   grep -rn material lib/
+   flutter analyze
+   flutter run
+
+  If flutter analyze reports a missing file, compare the import with the file list at the top
+ of this part. A warning about an unnecessary import is harmless, because several files
+ import both cupertino.dart and widgets.dart on purpose.
+
+ Check it. Use two accounts, Ana and Ben. As Ben, open Ana’s profile, tap the ... button and
+ choose Mute. Ana’s threads leave Ben’s For you feed. Open Settings, then Muted
+ accounts, and tap Unmute. They return. Now choose Block from the same menu. The
+  profile closes, and Ana disappears from Ben’s search. As Ana, search for Ben’s username.
+ Nothing is found. In Ben’s Settings, open Blocked accounts and tap Unblock. Next, report
+ Ana’s profile with a reason, and open the reports table in the Table Editor to find the row.
+  Last, create a throwaway third account, post one photo, then choose Delete account in
+ Settings and confirm twice. The app returns to the login screen. The profiles row and the
+ auth user are gone, and the account’s folder under thread-media in Storage is empty.
+
+
+
+
+
+                                                                                                                                    Page 49 of 49
