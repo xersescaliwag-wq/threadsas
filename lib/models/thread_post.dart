@@ -1,5 +1,6 @@
 // lib/models/thread_post.dart
 import 'package:threads/core/json.dart';
+import 'package:threads/models/music_track.dart';
 import 'package:threads/models/poll.dart';
 import 'package:threads/models/profile.dart';
 
@@ -31,6 +32,7 @@ class ThreadPost {
     required this.content,
     required this.mediaUrls,
     required this.mediaKinds,
+    required this.music,
     required this.parentId,
     required this.rootId,
     required this.communityId,
@@ -61,6 +63,7 @@ class ThreadPost {
   /// (Step 21.3). Older posts have none, so [mediaKindAt] falls back to the
   /// file extension.
   final List<String> mediaKinds;
+  final MusicTrack? music;
   final String? parentId;
   final String? rootId;
 
@@ -91,7 +94,9 @@ class ThreadPost {
   /// kinds win; otherwise the URL decides, so posts made before Step 21.3 still
   /// draw correctly.
   String mediaKindAt(int index) {
-    if (index >= 0 && index < mediaKinds.length && mediaKinds[index].isNotEmpty) {
+    if (index >= 0 &&
+        index < mediaKinds.length &&
+        mediaKinds[index].isNotEmpty) {
       return mediaKinds[index];
     }
     if (index < 0 || index >= mediaUrls.length) return 'image';
@@ -113,6 +118,7 @@ class ThreadPost {
       content: (json['content'] as String?) ?? '',
       mediaUrls: asStringList(json['media_urls']),
       mediaKinds: asStringList(json['media_kinds']),
+      music: MusicTrack.fromThreadJson(json),
       parentId: json['parent_id'] as String?,
       rootId: json['root_id'] as String?,
       communityId: json['community_id'] as String?,
@@ -148,9 +154,10 @@ class ThreadPost {
     final rawOptions = json['poll_options'];
     final options = rawOptions is List
         ? rawOptions
-            .map((option) =>
-                PollOption.fromJson(option as Map<String, dynamic>))
-            .toList()
+              .map(
+                (option) => PollOption.fromJson(option as Map<String, dynamic>),
+              )
+              .toList()
         : <PollOption>[];
     options.sort((a, b) => a.position.compareTo(b.position));
     return Poll(endsAt: asDate(pollMap['ends_at'])!, options: options);
@@ -176,6 +183,7 @@ class ThreadPost {
       content: content ?? this.content,
       mediaUrls: mediaUrls,
       mediaKinds: mediaKinds,
+      music: music,
       parentId: parentId,
       rootId: rootId,
       communityId: communityId,
@@ -211,5 +219,5 @@ class ThreadDetail {
   final ThreadPost focus;
   final List<ThreadPost> ancestors; // the top of the conversation first
   final List<ThreadPost> replies; // every reply under the focused post,
-                                  // oldest first
+  // oldest first
 }

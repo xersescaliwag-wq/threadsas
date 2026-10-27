@@ -40,7 +40,8 @@ dependencies:
   supabase_flutter: ^2.18.3
   url_launcher: ^6.3.3
   video_player: ^2.14.1
-
+  http: ^1.6.0
+  just_audio: ^0.10.6
 dev_dependencies:
   flutter_test:
     sdk: flutter

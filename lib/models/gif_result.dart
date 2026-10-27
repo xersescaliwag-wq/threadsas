@@ -1,7 +1,6 @@
 // lib/models/gif_result.dart
 
-/// One GIF from the gif-search Edge Function: a small preview for the picker
-/// and the full URL that gets stored in media_urls.
+/// One GIF selected with the GIPHY SDK. The full URL is stored in media_urls.
 class GifResult {
   const GifResult({
     required this.id,

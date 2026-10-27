@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:threads/core/adaptive.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/widgets/avatar.dart';
+import 'package:threads/widgets/music_sticker.dart';
 
 /// A quoted post shown inside another post. Tapping it opens the quoted thread.
 class QuoteCard extends StatelessWidget {
@@ -25,20 +26,30 @@ class QuoteCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Avatar(name: post.author.name, url: post.author.avatarUrl, size: 20),
+                Avatar(
+                  name: post.author.name,
+                  url: post.author.avatarUrl,
+                  size: 20,
+                ),
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     post.author.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   '@${post.author.username}',
-                  style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: context.colors.secondaryLabel,
+                  ),
                 ),
               ],
             ),
@@ -50,6 +61,10 @@ class QuoteCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 15),
               ),
+            ],
+            if (post.music != null) ...[
+              const SizedBox(height: 8),
+              MusicSticker(track: post.music!),
             ],
           ],
         ),

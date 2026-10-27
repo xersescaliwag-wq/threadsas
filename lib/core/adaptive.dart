@@ -502,6 +502,7 @@ class AppColors {
 
   // Accent/semantic colors (brand-consistent on Android)
   Color get activeBlue => _isIOS ? CupertinoColors.activeBlue : _scheme.primary;
+
   /// Text and icons that sit on [activeBlue] (outgoing message bubbles).
   Color get onActiveBlue => _isIOS ? CupertinoColors.white : _scheme.onPrimary;
   Color get systemBlue => _isIOS ? CupertinoColors.systemBlue : _scheme.primary;
@@ -592,8 +593,9 @@ abstract final class AppIcons {
   static IconData get exclamationmark_triangle => PlatformInfo.isIOS
       ? CupertinoIcons.exclamationmark_triangle
       : material.Icons.warning_amber_rounded;
-  static IconData get eye =>
-      PlatformInfo.isIOS ? CupertinoIcons.eye : material.Icons.visibility_outlined;
+  static IconData get eye => PlatformInfo.isIOS
+      ? CupertinoIcons.eye
+      : material.Icons.visibility_outlined;
   static IconData get hand_raised => PlatformInfo.isIOS
       ? CupertinoIcons.hand_raised
       : material.Icons.pan_tool_outlined;
@@ -612,6 +614,11 @@ abstract final class AppIcons {
       : material.Icons.menu;
   static IconData get lock_fill =>
       PlatformInfo.isIOS ? CupertinoIcons.lock_fill : material.Icons.lock;
+  static IconData get music_note => PlatformInfo.isIOS
+      ? CupertinoIcons.music_note_2
+      : material.Icons.music_note;
+  static IconData get pause_fill =>
+      PlatformInfo.isIOS ? CupertinoIcons.pause_fill : material.Icons.pause;
   static IconData get paperplane =>
       PlatformInfo.isIOS ? CupertinoIcons.paperplane : material.Icons.send;
   static IconData get pencil =>
@@ -637,6 +644,8 @@ abstract final class AppIcons {
   static IconData get play_circle_fill => PlatformInfo.isIOS
       ? CupertinoIcons.play_circle_fill
       : material.Icons.play_circle_fill;
+  static IconData get play_fill =>
+      PlatformInfo.isIOS ? CupertinoIcons.play_fill : material.Icons.play_arrow;
   static IconData get quote_bubble_fill => PlatformInfo.isIOS
       ? CupertinoIcons.quote_bubble_fill
       : material.Icons.format_quote;

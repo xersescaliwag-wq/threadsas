@@ -2,20 +2,22 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:threads/core/json.dart';
 import 'package:threads/models/poll.dart';
+import 'package:threads/models/music_track.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/models/topic_hit.dart';
+
 class ThreadRepository {
   ThreadRepository(this._client);
   final SupabaseClient _client;
   String get _me => _client.auth.currentUser!.id;
+
   /// Every thread query uses this select. It joins the author, the quoted post and the poll.
   static const _threadSelect =
-      '*, '
+      'id, author_id, content, media_urls, media_kinds, parent_id, root_id, quote_id, community_id, hashtags, mentions, reply_control, hide_like_count, is_pinned, expires_at, like_count, reply_count, repost_count, quote_count, edited_at, created_at, updated_at, music_id, music_title, music_artist, music_artwork_url, music_permalink, music_duration_seconds, music_clip_start_seconds, '
       'author:profiles!threads_author_id_fkey(id, username, display_name, bio, avatar_url, is_private, is_verified), '
       // The quote embed is threads -> threads (self-referential). PostgREST only
-      // resolves the hint by the foreign-key *column* here; its suggested
-      // constraint-name hint ('threads_quote_id_fkey') fails with PGRST200.
-      'quoted:threads!quote_id(*, author:profiles!threads_author_id_fkey(id, username, display_name, avatar_url, is_private, is_verified)), '
+      // resolves the hint by the column here; its suggested constraint-name hint fails with PGRST200.
+      'quoted:threads!quote_id(id, author_id, content, media_urls, media_kinds, parent_id, root_id, quote_id, community_id, hashtags, mentions, reply_control, hide_like_count, is_pinned, expires_at, like_count, reply_count, repost_count, quote_count, edited_at, created_at, updated_at, music_id, music_title, music_artist, music_artwork_url, music_permalink, music_duration_seconds, music_clip_start_seconds, author:profiles!threads_author_id_fkey(id, username, display_name, avatar_url, is_private, is_verified)), '
       'poll:polls(ends_at), '
       'poll_options(id, label, position, votes_count)';
   // ---------- Feeds ----------
@@ -23,6 +25,7 @@ class ThreadRepository {
   Future<List<ThreadPost>> fetchForYou({DateTime? before}) {
     return _topLevel(before: before);
   }
+
   /// Top-level posts from accounts the user follows, plus the user's own posts.
   Future<List<ThreadPost>> fetchFollowing({DateTime? before}) async {
     final followed = await _client
@@ -36,21 +39,30 @@ class ThreadRepository {
     ];
     return _topLevel(before: before, authorIds: authorIds);
   }
+
   /// Top-level posts that use a hashtag, for a topic page.
   Future<List<ThreadPost>> fetchTopic(String tag, {DateTime? before}) {
     return _topLevel(before: before, hashtag: tag.toLowerCase());
   }
+
   /// Top-level posts inside one community, for its own feed (Step 21.5).
-  Future<List<ThreadPost>> fetchCommunity(String communityId, {DateTime? before}) {
+  Future<List<ThreadPost>> fetchCommunity(
+    String communityId, {
+    DateTime? before,
+  }) {
     return _topLevel(before: before, communityId: communityId);
   }
+
   Future<List<ThreadPost>> _topLevel({
     DateTime? before,
     List<String>? authorIds,
     String? hashtag,
     String? communityId,
   }) async {
-    var query = _client.from('threads').select(_threadSelect).isFilter('parent_id', null);
+    var query = _client
+        .from('threads')
+        .select(_threadSelect)
+        .isFilter('parent_id', null);
     // A community's posts live only in that community's feed, and normal feeds
     // never show them.
     if (communityId != null) {
@@ -60,10 +72,13 @@ class ThreadRepository {
     }
     if (authorIds != null) query = query.inFilter('author_id', authorIds);
     if (hashtag != null) query = query.contains('hashtags', [hashtag]);
-    if (before != null) query = query.lt('created_at', before.toUtc().toIso8601String());
+    if (before != null) {
+      query = query.lt('created_at', before.toUtc().toIso8601String());
+    }
     final rows = await query.order('created_at', ascending: false).limit(20);
     return _hydrate(rows);
   }
+
   // ---------- Profile tabs ----------
   /// One profile tab: 'threads', 'replies' or 'reposts'. Pinned posts are fetched separately.
   Future<List<ThreadPost>> fetchByAuthor(
@@ -72,16 +87,22 @@ class ThreadRepository {
     DateTime? before,
   }) async {
     if (tab == 'reposts') return _repostsBy(authorId, before: before);
-    var query = _client.from('threads').select(_threadSelect).eq('author_id', authorId);
+    var query = _client
+        .from('threads')
+        .select(_threadSelect)
+        .eq('author_id', authorId);
     if (tab == 'replies') {
       query = query.not('parent_id', 'is', null);
     } else {
       query = query.isFilter('parent_id', null).eq('is_pinned', false);
     }
-    if (before != null) query = query.lt('created_at', before.toUtc().toIso8601String());
+    if (before != null) {
+      query = query.lt('created_at', before.toUtc().toIso8601String());
+    }
     final rows = await query.order('created_at', ascending: false).limit(20);
     return _hydrate(rows);
   }
+
   Future<ThreadPost?> fetchPinned(String authorId) async {
     final row = await _client
         .from('threads')
@@ -92,16 +113,23 @@ class ThreadRepository {
     if (row == null) return null;
     return (await _hydrate([row])).single;
   }
+
   Future<List<ThreadPost>> _repostsBy(String userId, {DateTime? before}) async {
     var query = _client
         .from('reposts')
         .select('created_at, thread:threads($_threadSelect)')
         .eq('user_id', userId);
-    if (before != null) query = query.lt('created_at', before.toUtc().toIso8601String());
+    if (before != null) {
+      query = query.lt('created_at', before.toUtc().toIso8601String());
+    }
     final rows = await query.order('created_at', ascending: false).limit(20);
-    final threads = rows.map((row) => row['thread']).whereType<Map<String, dynamic>>().toList();
+    final threads = rows
+        .map((row) => row['thread'])
+        .whereType<Map<String, dynamic>>()
+        .toList();
     return _hydrate(threads);
   }
+
   // ---------- Thread detail ----------
   /// The post, the posts above it, and every reply under it at any depth.
   Future<ThreadDetail?> fetchDetail(String threadId) async {
@@ -141,7 +169,9 @@ class ThreadRepository {
       added = false;
       for (final post in everyReply) {
         final parent = post.parentId;
-        if (parent != null && underFocus.contains(parent) && underFocus.add(post.id)) {
+        if (parent != null &&
+            underFocus.contains(parent) &&
+            underFocus.add(post.id)) {
           added = true;
         }
       }
@@ -151,6 +181,7 @@ class ThreadRepository {
         .toList();
     return ThreadDetail(focus: focus, ancestors: ancestors, replies: replies);
   }
+
   // ---------- Writes ----------
   /// Creates a post, a reply or a quote. A poll is created after the post. If the poll fails, the post is removed.
   Future<ThreadPost> createThread({
@@ -164,21 +195,26 @@ class ThreadRepository {
     bool hideLikeCount = false,
     DateTime? expiresAt,
     PollDraft? poll,
+    MusicTrack? music,
   }) async {
+    final payload = <String, Object?>{
+      'author_id': _me,
+      'content': content.trim(),
+      'media_urls': mediaUrls,
+      'media_kinds': mediaKinds,
+      'parent_id': parentId,
+      'quote_id': quoteId,
+      'community_id': communityId,
+      'reply_control': replyControl.value,
+      'hide_like_count': hideLikeCount,
+      'expires_at': expiresAt?.toUtc().toIso8601String(),
+    };
+    if (music != null) {
+      payload.addAll(music.toThreadColumns());
+    }
     final inserted = await _client
         .from('threads')
-        .insert({
-          'author_id': _me,
-          'content': content.trim(),
-          'media_urls': mediaUrls,
-          'media_kinds': mediaKinds,
-          'parent_id': parentId,
-          'quote_id': quoteId,
-          'community_id': communityId,
-          'reply_control': replyControl.value,
-          'hide_like_count': hideLikeCount,
-          'expires_at': expiresAt?.toUtc().toIso8601String(),
-        })
+        .insert(payload)
         .select('id')
         .single();
     final threadId = inserted['id'] as String;
@@ -190,9 +226,14 @@ class ThreadRepository {
         rethrow;
       }
     }
-    final row = await _client.from('threads').select(_threadSelect).eq('id', threadId).single();
+    final row = await _client
+        .from('threads')
+        .select(_threadSelect)
+        .eq('id', threadId)
+        .single();
     return (await _hydrate([row])).single;
   }
+
   Future<void> _createPoll(String threadId, PollDraft draft) async {
     await _client.from('polls').insert({
       'thread_id': threadId,
@@ -200,9 +241,14 @@ class ThreadRepository {
     });
     await _client.from('poll_options').insert([
       for (var i = 0; i < draft.options.length; i++)
-        {'thread_id': threadId, 'label': draft.options[i].trim(), 'position': i},
+        {
+          'thread_id': threadId,
+          'label': draft.options[i].trim(),
+          'position': i,
+        },
     ]);
   }
+
   /// Edits the text or settings of your own post. Hashtags and mentions are recalculated by the database.
   Future<void> updateThread(
     String threadId, {
@@ -218,37 +264,59 @@ class ThreadRepository {
     if (changes.isEmpty) return;
     await _client.from('threads').update(changes).eq('id', threadId);
   }
+
   Future<void> setPinned(String threadId, bool pinned) async {
-    await _client.from('threads').update({'is_pinned': pinned}).eq('id', threadId);
+    await _client
+        .from('threads')
+        .update({'is_pinned': pinned})
+        .eq('id', threadId);
   }
+
   Future<void> deleteThread(String threadId) async {
     await _client.from('threads').delete().eq('id', threadId);
   }
+
   /// Reacting writes the row only when it is not there yet. Every list holds its
   /// own copy of a post, so the user may tap a heart that already has a like
   /// behind it; that must succeed quietly instead of failing on the key.
   Future<void> like(String threadId) async {
+    await _client.from('likes').upsert({
+      'thread_id': threadId,
+      'user_id': _me,
+    }, ignoreDuplicates: true);
+  }
+
+  Future<void> unlike(String threadId) async {
     await _client
         .from('likes')
-        .upsert({'thread_id': threadId, 'user_id': _me}, ignoreDuplicates: true);
+        .delete()
+        .eq('thread_id', threadId)
+        .eq('user_id', _me);
   }
-  Future<void> unlike(String threadId) async {
-    await _client.from('likes').delete().eq('thread_id', threadId).eq('user_id', _me);
-  }
+
   Future<void> repost(String threadId) async {
+    await _client.from('reposts').upsert({
+      'thread_id': threadId,
+      'user_id': _me,
+    }, ignoreDuplicates: true);
+  }
+
+  Future<void> undoRepost(String threadId) async {
     await _client
         .from('reposts')
-        .upsert({'thread_id': threadId, 'user_id': _me}, ignoreDuplicates: true);
+        .delete()
+        .eq('thread_id', threadId)
+        .eq('user_id', _me);
   }
-  Future<void> undoRepost(String threadId) async {
-    await _client.from('reposts').delete().eq('thread_id', threadId).eq('user_id', _me);
-  }
+
   Future<void> votePoll(String threadId, String optionId) async {
-    await _client.from('poll_votes').upsert(
-          {'thread_id': threadId, 'option_id': optionId, 'user_id': _me},
-          ignoreDuplicates: true,
-        );
+    await _client.from('poll_votes').upsert({
+      'thread_id': threadId,
+      'option_id': optionId,
+      'user_id': _me,
+    }, ignoreDuplicates: true);
   }
+
   // ---------- Search ----------
   /// Full-text search. The search_threads function returns matching ids, then the normal select runs, so visibility rules still apply.
   Future<List<ThreadPost>> searchThreads(String query) async {
@@ -266,14 +334,19 @@ class ThreadRepository {
         .order('created_at', ascending: false);
     return _hydrate(rows);
   }
+
   /// Topics that start with the typed text. An empty query lists the most used.
   Future<List<TopicHit>> searchTopics(String query) async {
-    final rows = await _client.rpc('search_topics', params: {'q': query.trim()});
+    final rows = await _client.rpc(
+      'search_topics',
+      params: {'q': query.trim()},
+    );
     return (rows as List).map((row) {
       final map = row as Map<String, dynamic>;
       return TopicHit(tag: map['tag'] as String, uses: asInt(map['uses']));
     }).toList();
   }
+
   // ---------- Helpers ----------
   /// Turns rows into posts and adds the signed-in user's likes, reposts and poll votes.
   Future<List<ThreadPost>> _hydrate(List<Map<String, dynamic>> rows) async {
@@ -291,8 +364,13 @@ class ThreadRepository {
         .eq('user_id', _me)
         .inFilter('thread_id', ids);
     final likedIds = likedRows.map((row) => row['thread_id'] as String).toSet();
-    final repostedIds = repostedRows.map((row) => row['thread_id'] as String).toSet();
-    final pollIds = posts.where((post) => post.poll != null).map((post) => post.id).toList();
+    final repostedIds = repostedRows
+        .map((row) => row['thread_id'] as String)
+        .toSet();
+    final pollIds = posts
+        .where((post) => post.poll != null)
+        .map((post) => post.id)
+        .toList();
     final myVotes = <String, String>{};
     if (pollIds.isNotEmpty) {
       final voteRows = await _client

@@ -12,6 +12,7 @@ import 'package:threads/core/navigation.dart';
 import 'package:threads/data/instagram_repository.dart';
 import 'package:threads/models/community.dart';
 import 'package:threads/models/gif_result.dart';
+import 'package:threads/models/music_track.dart';
 import 'package:threads/models/poll.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/community_providers.dart';
@@ -20,7 +21,9 @@ import 'package:threads/providers/feed_providers.dart';
 import 'package:threads/providers/instagram_providers.dart';
 import 'package:threads/providers/thread_providers.dart';
 import 'package:threads/screens/compose/gif_search_sheet.dart';
+import 'package:threads/screens/compose/music_search_screen.dart';
 import 'package:threads/widgets/avatar.dart';
+import 'package:threads/widgets/music_sticker.dart';
 import 'package:threads/widgets/quote_card.dart';
 
 /// One screen for four jobs: a new post, a reply, a quote and an edit.
@@ -53,6 +56,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   /// GIFs chosen from the picker. They are remote URLs, so unlike [_media] they
   /// are not uploaded: their full URL goes straight into media_urls.
   final List<GifResult> _gifs = [];
+  MusicTrack? _music;
   ReplyControl _replyControl = ReplyControl.everyone;
   bool _hideLikes = false;
   bool _ghost = false;
@@ -104,8 +108,12 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   String? _problem() {
     final text = _text.text.trim();
     final keepsMedia = widget.editing?.mediaUrls.isNotEmpty ?? false;
-    if (text.isEmpty && _media.isEmpty && _gifs.isEmpty && !keepsMedia) {
-      return 'Write something, or add a photo, video or GIF.';
+    if (text.isEmpty &&
+        _media.isEmpty &&
+        _gifs.isEmpty &&
+        _music == null &&
+        !keepsMedia) {
+      return 'Write something, or add a photo, video, GIF or song.';
     }
     if (_pollOn) {
       final choices = [for (final option in _options) option.text.trim()];
@@ -177,6 +185,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
             ? DateTime.now().add(const Duration(hours: 24))
             : null,
         poll: _pollDraft(),
+        music: _music,
       );
       _refreshAfterCreate(created);
       // A failed Instagram copy must not block the thread, so the post is
@@ -235,7 +244,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   }
 
   Future<void> _pickMedia() async {
-    final room = maxMediaPerThread - _media.length;
+    final room = maxMediaPerThread - _media.length - _gifs.length;
     if (room <= 0) return;
     final picked = await ImagePicker().pickMultipleMedia();
     if (picked.isEmpty || !mounted) return;
@@ -247,6 +256,15 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     final choice = await openScreen<GifResult>(context, const GifSearchSheet());
     if (choice == null || !mounted) return;
     setState(() => _gifs.add(choice));
+  }
+
+  Future<void> _pickMusic() async {
+    final choice = await openScreen<MusicTrack>(
+      context,
+      const MusicSearchScreen(),
+    );
+    if (choice == null || !mounted) return;
+    setState(() => _music = choice);
   }
 
   Future<void> _chooseReplyControl() async {
@@ -288,68 +306,93 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   }
 
   Widget _mediaStrip() {
-    if (_media.isEmpty && _gifs.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    if (_media.isEmpty && _gifs.isEmpty && _music == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < _media.length; i++)
-          Stack(
-            clipBehavior: Clip.none,
+        if (_media.isNotEmpty || _gifs.isNotEmpty)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: _isVideo(_media[i].path)
-                    ? Container(
-                        width: 84,
-                        height: 84,
-                        color: context.colors.systemGrey5,
-                        alignment: Alignment.center,
-                        child: Icon(AppIcons.play_circle_fill, size: 34),
-                      )
-                    : Image.file(
-                        File(_media[i].path),
+              for (var i = 0; i < _media.length; i++)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: _isVideo(_media[i].path)
+                          ? Container(
+                              width: 84,
+                              height: 84,
+                              color: context.colors.systemGrey5,
+                              alignment: Alignment.center,
+                              child: Icon(AppIcons.play_circle_fill, size: 34),
+                            )
+                          : Image.file(
+                              File(_media[i].path),
+                              width: 84,
+                              height: 84,
+                              fit: BoxFit.cover,
+                            ),
+                    ),
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _media.removeAt(i)),
+                        child: Icon(AppIcons.xmark_circle_fill, size: 22),
+                      ),
+                    ),
+                  ],
+                ),
+              for (var i = 0; i < _gifs.length; i++)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        _gifs[i].previewUrl,
                         width: 84,
                         height: 84,
                         fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            ColoredBox(color: context.colors.systemGrey5),
                       ),
-              ),
-              Positioned(
-                top: -6,
-                right: -6,
-                child: GestureDetector(
-                  onTap: () => setState(() => _media.removeAt(i)),
-                  child: Icon(AppIcons.xmark_circle_fill, size: 22),
+                    ),
+                    const Positioned(left: 4, bottom: 4, child: _GifTag()),
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _gifs.removeAt(i)),
+                        child: Icon(AppIcons.xmark_circle_fill, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           ),
-        for (var i = 0; i < _gifs.length; i++)
+        if (_music != null) ...[
+          if (_media.isNotEmpty || _gifs.isNotEmpty) const SizedBox(height: 10),
           Stack(
             clipBehavior: Clip.none,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Image.network(
-                  _gifs[i].previewUrl,
-                  width: 84,
-                  height: 84,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      ColoredBox(color: context.colors.systemGrey5),
-                ),
-              ),
-              const Positioned(left: 4, bottom: 4, child: _GifTag()),
+              MusicSticker(track: _music!),
               Positioned(
                 top: -6,
                 right: -6,
                 child: GestureDetector(
-                  onTap: () => setState(() => _gifs.removeAt(i)),
+                  onTap: () => setState(() => _music = null),
                   child: Icon(AppIcons.xmark_circle_fill, size: 22),
                 ),
               ),
             ],
           ),
+        ],
       ],
     );
   }
@@ -506,8 +549,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     final buttonLabel = _isEditing ? 'Save' : (_isReply ? 'Reply' : 'Post');
     final problem = _problem();
     final canPost = !_busy && problem == null;
-    final canAddMedia =
-        !_isEditing && (_media.length + _gifs.length) < maxMediaPerThread;
+    final canAddAttachments = !_isEditing;
     final userId = ref.watch(currentUserIdProvider);
     final profile = userId == null
         ? null
@@ -603,7 +645,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
                                   ),
                                   onChanged: (_) => setState(() {}),
                                 ),
-                                if (canAddMedia) _attachmentRow(),
+                                if (canAddAttachments) _attachmentRow(),
                                 if (!_isEditing) ...[
                                   const SizedBox(height: 12),
                                   _mediaStrip(),
@@ -684,6 +726,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     children: [
       _attachmentButton(AppIcons.photo_on_rectangle, _pickMedia),
       _attachmentButton(null, _pickGif, label: 'GIF'),
+      _attachmentButton(AppIcons.music_note, _pickMusic),
       _attachmentButton(AppIcons.smiley, () {}),
       _attachmentButton(
         AppIcons.ellipsis,
@@ -696,26 +739,36 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     IconData? icon,
     VoidCallback onTap, {
     String? label,
-  }) => Padding(
-    padding: const EdgeInsets.only(right: 17),
-    child: GestureDetector(
-      onTap: onTap,
-      child: icon == null
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: context.colors.secondaryLabel,
-                  width: 2,
+  }) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: SizedBox(
+      width: 48,
+      height: 44,
+      child: Center(
+        child: icon == null
+            ? Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: context.colors.secondaryLabel,
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(5),
                 ),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(
-                label!,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            )
-          : Icon(icon, size: 27, color: context.colors.secondaryLabel),
+                child: Text(
+                  label!,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: .2,
+                  ),
+                ),
+              )
+            : Icon(icon, size: 28, color: context.colors.secondaryLabel),
+      ),
     ),
   );
 

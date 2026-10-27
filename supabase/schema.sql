@@ -1545,5 +1545,57 @@ begin
   end if;
 end $$;
 
+-- ============================================================================
+-- Step 21.7: 30-second music stickers
+-- Only Audius track metadata and the chosen clip start are stored. Audio is
+-- streamed from the provider when a listener presses play.
+-- ============================================================================
+
+alter table public.threads
+  add column if not exists music_id text,
+  add column if not exists music_title text,
+  add column if not exists music_artist text,
+  add column if not exists music_artwork_url text,
+  add column if not exists music_permalink text,
+  add column if not exists music_duration_seconds integer,
+  add column if not exists music_clip_start_seconds integer;
+
+alter table public.threads drop constraint if exists threads_music_check;
+alter table public.threads add constraint threads_music_check check (
+  (
+    music_id is null
+    and music_title is null
+    and music_artist is null
+    and music_artwork_url is null
+    and music_permalink is null
+    and music_duration_seconds is null
+    and music_clip_start_seconds is null
+  )
+  or
+  (
+    music_id is not null
+    and music_title is not null
+    and music_artist is not null
+    and music_artwork_url is not null
+    and music_permalink is not null
+    and music_duration_seconds is not null
+    and music_clip_start_seconds is not null
+    and
+    char_length(music_id) between 1 and 100
+    and char_length(music_title) between 1 and 300
+    and char_length(music_artist) between 1 and 300
+    and music_duration_seconds >= 30
+    and music_clip_start_seconds between 0 and music_duration_seconds - 30
+  )
+);
+
+-- Music-only posts are valid, just like text-only and media-only posts.
+alter table public.threads drop constraint if exists threads_has_body;
+alter table public.threads add constraint threads_has_body check (
+  char_length(trim(content)) > 0
+  or cardinality(media_urls) > 0
+  or music_id is not null
+);
+
 -- Check: every table listed here should show true.
 select tablename, rowsecurity from pg_tables where schemaname = 'public' order by tablename;

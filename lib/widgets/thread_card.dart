@@ -16,6 +16,7 @@ import 'package:threads/screens/thread/thread_detail_screen.dart';
 import 'package:threads/widgets/avatar.dart';
 import 'package:threads/widgets/link_preview_card.dart';
 import 'package:threads/widgets/media_grid.dart';
+import 'package:threads/widgets/music_sticker.dart';
 import 'package:threads/widgets/poll_view.dart';
 import 'package:threads/widgets/quote_card.dart';
 import 'package:threads/widgets/rich_content.dart';
@@ -66,7 +67,8 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
 
   /// The newest copy of this post: a change made on another screen wins over the
   /// copy this card was built with.
-  ThreadPost get _latest => ref.read(postStateProvider)[widget.post.id] ?? _post;
+  ThreadPost get _latest =>
+      ref.read(postStateProvider)[widget.post.id] ?? _post;
 
   Future<void> _vote(String optionId) async {
     final before = _latest;
@@ -84,7 +86,11 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
         else
           option,
     ];
-    _update(before.copyWith(poll: poll.copyWith(options: options, myOptionId: optionId)));
+    _update(
+      before.copyWith(
+        poll: poll.copyWith(options: options, myOptionId: optionId),
+      ),
+    );
     try {
       await ref.read(threadRepositoryProvider).votePoll(before.id, optionId);
     } catch (error) {
@@ -95,17 +101,25 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
   }
 
   Future<void> _openMention(String username) async {
-    final profile = await ref.read(profileRepositoryProvider).getByUsername(username);
+    final profile = await ref
+        .read(profileRepositoryProvider)
+        .getByUsername(username);
     if (!mounted) return;
     if (profile == null) {
-      await showMessage(context, 'Profile not found', '@$username is not on Threads.');
+      await showMessage(
+        context,
+        'Profile not found',
+        '@$username is not on Threads.',
+      );
       return;
     }
     await openScreen<void>(context, ProfileScreen(userId: profile.id));
   }
 
-  void _openTopic(String tag) => openScreen<void>(context, TopicScreen(tag: tag));
-  void _openProfile() => openScreen<void>(context, ProfileScreen(userId: _post.author.id));
+  void _openTopic(String tag) =>
+      openScreen<void>(context, TopicScreen(tag: tag));
+  void _openProfile() =>
+      openScreen<void>(context, ProfileScreen(userId: _post.author.id));
   void _openThread() {
     if (widget.opensOnTap) {
       openScreen<void>(context, ThreadDetailScreen(threadId: _post.id));
@@ -114,7 +128,9 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
 
   String? _expiryNote(DateTime expiresAt) {
     final hours = expiresAt.difference(DateTime.now()).inHours;
-    return hours < 1 ? 'Disappears in under an hour' : 'Disappears in ${hours}h';
+    return hours < 1
+        ? 'Disappears in under an hour'
+        : 'Disappears in ${hours}h';
   }
 
   Widget _note(IconData icon, String text) {
@@ -126,7 +142,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
           const SizedBox(width: 4),
           Text(
             text,
-            style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
+            style: TextStyle(
+              fontSize: 13,
+              color: context.colors.secondaryLabel,
+            ),
           ),
         ],
       ),
@@ -137,7 +156,9 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
   Widget build(BuildContext context) {
     // Another screen may have liked or voted on this post after its list was
     // fetched, and that newer copy wins over the one this card was built with.
-    final shared = ref.watch(postStateProvider.select((all) => all[widget.post.id]));
+    final shared = ref.watch(
+      postStateProvider.select((all) => all[widget.post.id]),
+    );
     final post = shared ?? _post;
     final me = ref.watch(currentUserIdProvider);
     final isMine = post.author.id == me;
@@ -154,7 +175,11 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
           children: [
             GestureDetector(
               onTap: _openProfile,
-              child: Avatar(name: post.author.name, url: post.author.avatarUrl, size: 40),
+              child: Avatar(
+                name: post.author.name,
+                url: post.author.avatarUrl,
+                size: 40,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -174,7 +199,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                                   post.author.name,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               if (post.author.isVerified) ...[
@@ -195,7 +223,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                           '@${post.author.username} · ${timeAgo(post.createdAt)}$edited',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: context.colors.secondaryLabel,
+                          ),
                         ),
                       ),
                       const Spacer(),
@@ -232,6 +263,10 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                   if (post.mediaUrls.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     MediaGrid(urls: post.mediaUrls, kinds: post.mediaKinds),
+                  ],
+                  if (post.music != null) ...[
+                    const SizedBox(height: 10),
+                    MusicSticker(track: post.music!),
                   ],
                   if (post.quoted != null) ...[
                     const SizedBox(height: 10),

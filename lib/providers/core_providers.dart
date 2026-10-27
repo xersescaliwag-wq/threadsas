@@ -8,12 +8,16 @@ import 'package:threads/data/instagram_repository.dart';
 import 'package:threads/data/link_preview_repository.dart';
 import 'package:threads/data/media_repository.dart';
 import 'package:threads/data/message_repository.dart';
+import 'package:threads/data/music_repository.dart';
 import 'package:threads/data/notification_repository.dart';
 import 'package:threads/data/profile_repository.dart';
 import 'package:threads/data/social_repository.dart';
 import 'package:threads/data/thread_repository.dart';
 import 'package:threads/models/profile.dart';
-final supabaseClientProvider = Provider<SupabaseClient>((ref) => Supabase.instance.client);
+
+final supabaseClientProvider = Provider<SupabaseClient>(
+  (ref) => Supabase.instance.client,
+);
 final authRepositoryProvider = Provider<AuthRepository>(
   (ref) => AuthRepository(ref.watch(supabaseClientProvider)),
 );
@@ -38,19 +42,28 @@ final messageRepositoryProvider = Provider<MessageRepository>(
 final linkPreviewRepositoryProvider = Provider<LinkPreviewRepository>(
   (ref) => LinkPreviewRepository(ref.watch(supabaseClientProvider)),
 );
-final gifRepositoryProvider = Provider<GifRepository>(
-  (ref) => GifRepository(ref.watch(supabaseClientProvider)),
-);
+final gifRepositoryProvider = Provider<GifRepository>((ref) {
+  final repository = GifRepository();
+  ref.onDispose(repository.close);
+  return repository;
+});
+final musicRepositoryProvider = Provider<MusicRepository>((ref) {
+  final repository = MusicRepository();
+  ref.onDispose(repository.close);
+  return repository;
+});
 final communityRepositoryProvider = Provider<CommunityRepository>(
   (ref) => CommunityRepository(ref.watch(supabaseClientProvider)),
 );
 final instagramRepositoryProvider = Provider<InstagramRepository>(
   (ref) => InstagramRepository(ref.watch(supabaseClientProvider)),
 );
+
 /// Emits on every sign-in, sign-out and token refresh.
 final authStateProvider = StreamProvider<AuthState>(
   (ref) => ref.watch(supabaseClientProvider).auth.onAuthStateChange,
 );
+
 /// The signed-in user's id, or null. Providers that depend on the user watch this, so they reload after sign-in or sign-out.
 final currentUserIdProvider = Provider<String?>((ref) {
   ref.watch(authStateProvider);

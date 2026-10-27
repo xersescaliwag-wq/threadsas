@@ -1,5 +1,6 @@
 // lib/screens/compose/gif_search_sheet.dart
 import 'dart:async';
+
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,12 +9,8 @@ import 'package:threads/data/gif_repository.dart';
 import 'package:threads/models/gif_result.dart';
 import 'package:threads/providers/core_providers.dart';
 
-/// The GIF picker opened from the composer. It returns the chosen GIF through
-/// Navigator.pop, and the composer stores its full URL in media_urls
-/// (Step 21.3).
-///
-/// The provider key lives only in the gif-search Edge Function, so the app
-/// never holds it. An empty query shows the provider's trending GIFs.
+/// Fast client-side GIPHY picker. The grid uses lightweight animated WebP
+/// previews; the selected post still stores a compatible GIF URL.
 class GifSearchSheet extends ConsumerStatefulWidget {
   const GifSearchSheet({super.key});
 
@@ -27,8 +24,6 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
   List<GifResult> _results = const [];
   bool _loading = true;
   String? _error;
-
-  /// The newest query, so a slow reply for an old query cannot overwrite it.
   String _lastQuery = '';
 
   @override
@@ -44,10 +39,9 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
     super.dispose();
   }
 
-  /// Wait until typing pauses, so a search fires per word rather than per key.
   void _onChanged(String value) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(value));
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(value));
   }
 
   Future<void> _search(String query) async {
@@ -91,6 +85,16 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
               ),
             ),
             Expanded(child: _resultsView()),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Powered by GIPHY',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.colors.secondaryLabel,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -122,6 +126,10 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
         ),
       );
     }
+
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final targetWidth = (MediaQuery.sizeOf(context).width * pixelRatio / 2)
+        .round();
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -139,6 +147,13 @@ class _GifSearchSheetState extends ConsumerState<GifSearchSheet> {
             child: Image.network(
               gif.previewUrl,
               fit: BoxFit.cover,
+              cacheWidth: targetWidth,
+              filterQuality: FilterQuality.low,
+              gaplessPlayback: true,
+              frameBuilder: (context, child, frame, loadedSynchronously) {
+                if (loadedSynchronously || frame != null) return child;
+                return ColoredBox(color: context.colors.systemGrey5);
+              },
               errorBuilder: (context, error, stackTrace) =>
                   ColoredBox(color: context.colors.systemGrey5),
             ),
