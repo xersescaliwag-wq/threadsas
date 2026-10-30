@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +70,26 @@ void main() {
       ),
     );
     expect(tester.getSize(find.byKey(const Key('c'))).width, 390);
+  });
+
+  testWidgets('chat-style icon buttons update their enabled state', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(AppIconButton(icon: AppIcons.paperplane, onPressed: null)),
+    );
+    expect(
+      tester.widget<AdaptiveButton>(find.byType(AdaptiveButton)).enabled,
+      isFalse,
+    );
+
+    await tester.pumpWidget(
+      _app(AppIconButton(icon: AppIcons.paperplane, onPressed: () {})),
+    );
+    expect(
+      tester.widget<AdaptiveButton>(find.byType(AdaptiveButton)).enabled,
+      isTrue,
+    );
   });
 
   testWidgets('wide screens cap the column at 600 and center it', (

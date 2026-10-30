@@ -398,6 +398,11 @@ class AppIconButton extends StatelessWidget {
     label: semanticLabel,
     child: AdaptiveButton.child(
       onPressed: onPressed,
+      // iOS 26 native buttons only refresh their enabled state when this
+      // property changes. Keep it in sync with the nullable callback so a
+      // button that starts disabled (such as chat Reply/Send) becomes tappable
+      // as soon as its text field has content.
+      enabled: onPressed != null,
       style: AdaptiveButtonStyle.plain,
       color: color ?? context.colors.label,
       padding: padding,
