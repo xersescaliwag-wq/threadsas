@@ -36,3 +36,4 @@ workflows:
           cd build/ios/iphoneos && zip -r unsigned_app.ipa Payload
     artifacts:
       - build/ios/iphoneos/unsigned_app.ipa
+
