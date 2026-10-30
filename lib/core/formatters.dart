@@ -10,7 +10,7 @@ String timeAgo(DateTime time, {DateTime? now}) {
   return '${time.day}/${time.month}/${time.year}';
 }
 
-/// Readable relative time for post and reply metadata, such as "23 mins" or
+/// Readable relative  time for post and reply metadata, such as "23 mins" or
 /// "1 hr".
 String timeAgoLong(DateTime time, {DateTime? now}) {
   final difference = (now ?? DateTime.now()).difference(time);
