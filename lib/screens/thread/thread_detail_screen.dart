@@ -1,7 +1,6 @@
 // lib/screens/thread/thread_detail_screen.dart
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/config.dart';
@@ -83,12 +82,14 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
     );
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Thread'),
-      body: detail.when<Widget>(
-        loading: () => const _ThreadSkeletonList(),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (data) => data == null
-            ? const Center(child: Text('This thread is no longer available.'))
-            : ResponsiveContent(child: _buildThread(data)),
+      body: AppContentSafeArea(
+        child: detail.when<Widget>(
+          loading: () => const _ThreadSkeletonList(),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (data) => data == null
+              ? const Center(child: Text('This thread is no longer available.'))
+              : ResponsiveContent(child: _buildThread(data)),
+        ),
       ),
     );
   }

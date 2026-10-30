@@ -185,6 +185,25 @@ class AppRefreshView extends StatelessWidget {
   }
 }
 
+/// Keeps page content below the iOS 26 native toolbar and status area.
+///
+/// The iOS 26 toolbar is drawn above the page rather than taking layout space.
+/// `AdaptiveScaffold` exposes that clearance through [MediaQuery.padding], and
+/// this wrapper consumes it for root page content. On Android and older iOS
+/// versions the platform scaffold already manages the inset, so the child is
+/// left unchanged.
+class AppContentSafeArea extends StatelessWidget {
+  const AppContentSafeArea({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PlatformInfo.isIOS26OrHigher()) return child;
+    return SafeArea(bottom: false, child: child);
+  }
+}
+
 /// Widest a reading column is allowed to grow. Posts, chats and lists stay at
 /// this width on tablets and in landscape instead of stretching edge to edge.
 const double contentMaxWidth = 600;

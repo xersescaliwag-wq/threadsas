@@ -1,7 +1,6 @@
 // lib/screens/profile/profile_screen.dart
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:threads/core/adaptive.dart';
 import 'package:threads/core/errors.dart';
@@ -223,16 +222,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileByIdProvider(widget.userId));
     final me = ref.watch(currentUserIdProvider);
-    final body = ResponsiveContent(
-      child: profileAsync.when<Widget>(
-        loading: () => _profileSkeleton(),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (profile) {
-          if (profile == null) {
-            return const Center(child: Text('This account is not available.'));
-          }
-          return _buildBody(profile, isMine: profile.id == me);
-        },
+    final body = AppContentSafeArea(
+      child: ResponsiveContent(
+        child: profileAsync.when<Widget>(
+          loading: () => _profileSkeleton(),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (profile) {
+            if (profile == null) {
+              return const Center(
+                child: Text('This account is not available.'),
+              );
+            }
+            return _buildBody(profile, isMine: profile.id == me);
+          },
+        ),
       ),
     );
     if (!widget.showAppBar) return body;

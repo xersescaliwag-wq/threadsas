@@ -117,16 +117,18 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
-      body: ResponsiveContent(
-        child: IndexedStack(
-          index: _tab,
-          children: [
-            const HomeScreen(),
-            const MessagesScreen(),
-            const SizedBox.shrink(),
-            ActivityScreen(isVisible: _tab == 3),
-            ProfileScreen(userId: me, showAppBar: false),
-          ],
+      body: AppContentSafeArea(
+        child: ResponsiveContent(
+          child: IndexedStack(
+            index: _tab,
+            children: [
+              const HomeScreen(),
+              const MessagesScreen(),
+              const SizedBox.shrink(),
+              ActivityScreen(isVisible: _tab == 3),
+              ProfileScreen(userId: me, showAppBar: false),
+            ],
+          ),
         ),
       ),
     );
