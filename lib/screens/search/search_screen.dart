@@ -62,25 +62,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Explore',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -.4,
-                ),
-              ),
-              const SizedBox(height: 12),
-              AppSearchField(
-                controller: _controller,
-                placeholder: 'Search people, threads, or topics',
-                onChanged: _onChanged,
-                onSubmitted: _onSubmitted,
-              ),
-            ],
+          child: AppSearchField(
+            controller: _controller,
+            placeholder: 'Search people, threads, or topics',
+            onChanged: _onChanged,
+            onSubmitted: _onSubmitted,
           ),
         ),
         Padding(

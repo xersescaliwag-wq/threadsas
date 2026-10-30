@@ -297,8 +297,8 @@ class _HomeSearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AdaptiveScaffold(
-    appBar: AdaptiveAppBar(title: 'Search'),
-    body: const SearchScreen(),
+    appBar: AdaptiveAppBar(title: 'Explore', useNativeToolbar: false),
+    body: const ResponsiveContent(child: SearchScreen()),
   );
 }
 

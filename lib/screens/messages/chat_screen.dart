@@ -1,6 +1,6 @@
 // lib/screens/messages/chat_screen.dart
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter/services.dart' show TextInputAction;
+import 'package:flutter/services.dart' show TextCapitalization, TextInputAction;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:threads/core/adaptive.dart';
@@ -26,6 +26,7 @@ class ChatScreen extends ConsumerStatefulWidget {
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _controller = TextEditingController();
+  final _composerFocus = FocusNode();
   final _reactionBusy = <String>{};
   bool _busy = false;
   bool _hasText = false;
@@ -48,7 +49,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _controller
       ..removeListener(_onComposerChanged)
       ..dispose();
+    _composerFocus.dispose();
     super.dispose();
+  }
+
+  void _beginReply(Message message) {
+    setState(() => _replyingTo = message);
+    // The reply action should leave the person ready to type as soon as the
+    // horizontal action menu closes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _composerFocus.requestFocus();
+    });
   }
 
   Future<void> _markRead(String conversationId, String newestMessageId) async {
@@ -238,79 +249,88 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       bottomLeft: Radius.circular(mine || continuation ? 15 : 6),
       bottomRight: Radius.circular(!mine || continuation ? 15 : 6),
     );
+    final maxBubbleWidth = (MediaQuery.sizeOf(context).width * .72)
+        .clamp(0.0, 440.0)
+        .toDouble();
     return Column(
       children: [
         if (showDay) _dayChip(message.createdAt),
         Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-          child: GestureDetector(
-            onLongPress: message.deletedAt == null
-                ? () => _messageActions(message)
-                : null,
-            child: Column(
-              crossAxisAlignment: mine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: EdgeInsets.only(
-                    top: continuation ? 2 : 10,
-                    bottom: message.reactions.isEmpty ? 3 : 0,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  constraints: BoxConstraints(
-                    // Cap the bubble at the app’s reading column so landscape
-                    // phones (where 76% of a wide screen still exceeds 600pt)
-                    // don’t stretch messages across the whole screen.
-                    maxWidth: MediaQuery.sizeOf(context).width * .76 > 480
-                        ? 480
-                        : MediaQuery.sizeOf(context).width * .76,
-                  ),
-                  decoration: BoxDecoration(
-                    color: background,
-                    borderRadius: radius,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (replyTo != null) _replyQuote(replyTo, mine),
-                      Text(
-                        message.deletedAt == null
-                            ? message.body
-                            : 'Message unsent',
-                        style: TextStyle(
-                          fontSize: 15,
-                          height: 1.25,
-                          color: foreground,
-                          fontStyle: message.deletedAt == null
-                              ? FontStyle.normal
-                              : FontStyle.italic,
-                        ),
-                      ),
-                      if (!continuation) ...[
-                        const SizedBox(height: 3),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            timeAgo(message.createdAt),
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: mine
-                                  ? foreground.withValues(alpha: .72)
-                                  : context.colors.secondaryLabel,
-                            ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+            child: GestureDetector(
+              onLongPress: message.deletedAt == null
+                  ? () => _messageActions(message)
+                  : null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: mine
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    margin: EdgeInsets.only(
+                      top: continuation ? 2 : 10,
+                      bottom: message.reactions.isEmpty ? 3 : 0,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    constraints: BoxConstraints(
+                      // Cap the bubble at the app’s reading column so landscape
+                      // phones (where 76% of a wide screen still exceeds 600pt)
+                      // don’t stretch messages across the whole screen.
+                      maxWidth: MediaQuery.sizeOf(context).width * .76 > 480
+                          ? 480
+                          : MediaQuery.sizeOf(context).width * .76,
+                    ),
+                    decoration: BoxDecoration(
+                      color: background,
+                      borderRadius: radius,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (replyTo != null) _replyQuote(replyTo, mine),
+                        Text(
+                          message.deletedAt == null
+                              ? message.body
+                              : 'Message unsent',
+                          style: TextStyle(
+                            fontSize: 15,
+                            height: 1.25,
+                            color: foreground,
+                            fontStyle: message.deletedAt == null
+                                ? FontStyle.normal
+                                : FontStyle.italic,
                           ),
                         ),
+                        if (!continuation) ...[
+                          const SizedBox(height: 3),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              timeAgo(message.createdAt),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: mine
+                                    ? foreground.withValues(alpha: .72)
+                                    : context.colors.secondaryLabel,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                if (message.reactions.isNotEmpty) _reactionRow(message),
-              ],
+                  if (message.reactions.isNotEmpty) _reactionRow(message),
+                ],
+              ),
             ),
           ),
         ),
@@ -349,7 +369,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ? 'Yesterday'
         : '${date.month}/${date.day}/${date.year}';
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      padding: const EdgeInsets.only(top: 12, bottom: 2),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
@@ -532,7 +552,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 9),
                           onPressed: () {
                             Navigator.pop(sheetContext);
-                            setState(() => _replyingTo = message);
+                            _beginReply(message);
                           },
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -649,66 +669,78 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget _composer(String conversationId) => SafeArea(
     top: false,
     child: Container(
-      padding: const EdgeInsets.fromLTRB(14, 7, 14, 10),
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
       decoration: BoxDecoration(
         color: context.colors.systemBackground,
         border: Border(
           top: BorderSide(color: context.colors.separator, width: .5),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (_replyingTo != null) _replyComposerBar(),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 46),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_replyingTo != null) _replyComposerBar(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 46),
+                    decoration: BoxDecoration(
+                      color: context.colors.systemGrey6,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: AdaptiveTextField(
+                      controller: _controller,
+                      focusNode: _composerFocus,
+                      placeholder: _replyingTo == null ? 'Message' : 'Reply',
+                      minLines: 1,
+                      maxLines: 5,
+                      textInputAction: TextInputAction.send,
+                      textCapitalization: TextCapitalization.sentences,
+                      onSubmitted: (_) {
+                        _send(conversationId);
+                      },
+                      padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
+                      cupertinoDecoration: const BoxDecoration(),
+                      decoration: borderlessInputDecoration(
+                        hintText: _replyingTo == null ? 'Message' : 'Reply',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 46,
+                  height: 46,
                   decoration: BoxDecoration(
-                    color: context.colors.systemGrey6,
-                    borderRadius: BorderRadius.circular(15),
+                    color: _hasText && !_busy
+                        ? context.colors.activeBlue
+                        : context.colors.systemGrey5,
+                    shape: BoxShape.circle,
                   ),
-                  child: AdaptiveTextField(
-                    controller: _controller,
-                    placeholder: 'Message',
-                    minLines: 1,
-                    maxLines: 5,
-                    textInputAction: TextInputAction.newline,
-                    padding: const EdgeInsets.fromLTRB(15, 10, 15, 10),
-                    cupertinoDecoration: const BoxDecoration(),
-                    decoration: borderlessInputDecoration(hintText: 'Message'),
+                  child: AppIconButton(
+                    padding: EdgeInsets.zero,
+                    minSize: const Size(46, 46),
+                    onPressed: !_hasText || _busy
+                        ? null
+                        : () => _send(conversationId),
+                    icon: AppIcons.paperplane,
+                    size: 20,
+                    color: _hasText && !_busy
+                        ? context.colors.onActiveBlue
+                        : context.colors.secondaryLabel,
+                    semanticLabel: 'Send reply',
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: _hasText
-                      ? context.colors.activeBlue
-                      : context.colors.systemGrey5,
-                  shape: BoxShape.circle,
-                ),
-                child: AppIconButton(
-                  padding: EdgeInsets.zero,
-                  minSize: const Size(46, 46),
-                  onPressed: !_hasText || _busy
-                      ? null
-                      : () => _send(conversationId),
-                  icon: AppIcons.paperplane,
-                  size: 20,
-                  color: _hasText
-                      ? context.colors.onActiveBlue
-                      : context.colors.secondaryLabel,
-                  semanticLabel: 'Send message',
-                ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     ),
   );
@@ -717,11 +749,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final message = _replyingTo!;
     return Container(
       margin: const EdgeInsets.only(bottom: 7),
-      padding: const EdgeInsets.only(left: 9),
+      padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
       decoration: BoxDecoration(
-        border: Border(
-          left: BorderSide(color: context.colors.activeBlue, width: 2),
-        ),
+        color: context.colors.systemGrey6,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.colors.separator, width: .5),
       ),
       child: Row(
         children: [

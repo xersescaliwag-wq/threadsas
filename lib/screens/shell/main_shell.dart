@@ -140,7 +140,7 @@ class _SearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AdaptiveScaffold(
-    appBar: AdaptiveAppBar(title: 'Search'),
+    appBar: AdaptiveAppBar(title: 'Explore', useNativeToolbar: false),
     body: const ResponsiveContent(child: SearchScreen()),
   );
 }
