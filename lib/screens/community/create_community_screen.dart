@@ -57,7 +57,8 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
   String? _problem() {
     final name = _name.text.trim();
     final slug = _slug.text.trim().toLowerCase();
-    if (name.length < 3) return 'Give the community a name of 3 letters or more.';
+    if (name.length < 3)
+      return 'Give the community a name of 3 letters or more.';
     if (name.length > 60) return 'Keep the name to 60 letters or fewer.';
     if (!_slugPattern.hasMatch(slug)) {
       return 'The link can use 3 to 30 lowercase letters, numbers or underscores.';
@@ -77,7 +78,9 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
     }
     setState(() => _busy = true);
     try {
-      final created = await ref.read(communityRepositoryProvider).create(
+      final created = await ref
+          .read(communityRepositoryProvider)
+          .create(
             name: _name.text,
             slug: _slug.text,
             description: _description.text,
@@ -95,74 +98,103 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'New community'),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          children: [
-            Text('Name', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
-            const SizedBox(height: 6),
-            AdaptiveTextField(
-              controller: _name,
-              placeholder: 'Photography',
-              maxLength: 60,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            Text('Link', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
-            const SizedBox(height: 6),
-            AdaptiveTextField(
-              controller: _slug,
-              placeholder: 'photography',
-              maxLength: 30,
-              prefix: Padding(
-                padding: EdgeInsets.only(left: 10),
-                child: Text('threads/', style: TextStyle(color: context.colors.secondaryLabel)),
+      body: ResponsiveContent(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            children: [
+              Text(
+                'Name',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.secondaryLabel,
+                ),
               ),
-              onChanged: (value) {
-                _slugEdited = value.trim().isNotEmpty;
-                setState(() {});
-              },
-            ),
-            const SizedBox(height: 12),
-            Text('Description', style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel)),
-            const SizedBox(height: 6),
-            AdaptiveTextField(
-              controller: _description,
-              placeholder: 'What is this community about?',
-              minLines: 3,
-              maxLines: 5,
-              maxLength: 300,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Private community', style: TextStyle(fontSize: 16)),
-                      Text(
-                        'Only members can see the community and its posts.',
-                        style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
-                      ),
-                    ],
+              const SizedBox(height: 6),
+              AdaptiveTextField(
+                controller: _name,
+                placeholder: 'Photography',
+                maxLength: 60,
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Link',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.secondaryLabel,
+                ),
+              ),
+              const SizedBox(height: 6),
+              AdaptiveTextField(
+                controller: _slug,
+                placeholder: 'photography',
+                maxLength: 30,
+                prefix: Padding(
+                  padding: EdgeInsets.only(left: 10),
+                  child: Text(
+                    'threads/',
+                    style: TextStyle(color: context.colors.secondaryLabel),
                   ),
                 ),
-                AdaptiveSwitch(
-                  value: _private,
-                  onChanged: (value) => setState(() => _private = value),
+                onChanged: (value) {
+                  _slugEdited = value.trim().isNotEmpty;
+                  setState(() {});
+                },
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Description',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.secondaryLabel,
                 ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            AdaptiveButton.child(
-              onPressed: _busy ? null : _create,
-              child: _busy
-                  ? const AppSpinner()
-                  : const Text('Create community'),
-            ),
-          ],
+              ),
+              const SizedBox(height: 6),
+              AdaptiveTextField(
+                controller: _description,
+                placeholder: 'What is this community about?',
+                minLines: 3,
+                maxLines: 5,
+                maxLength: 300,
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Private community',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        Text(
+                          'Only members can see the community and its posts.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.colors.secondaryLabel,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AdaptiveSwitch(
+                    value: _private,
+                    onChanged: (value) => setState(() => _private = value),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              AdaptiveButton.child(
+                onPressed: _busy ? null : _create,
+                child: _busy
+                    ? const AppSpinner()
+                    : const Text('Create community'),
+              ),
+            ],
+          ),
         ),
       ),
     );

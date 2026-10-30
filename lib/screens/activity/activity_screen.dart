@@ -15,16 +15,20 @@ import 'package:threads/screens/profile/follow_requests_screen.dart';
 import 'package:threads/screens/profile/profile_screen.dart';
 import 'package:threads/screens/thread/thread_detail_screen.dart';
 import 'package:threads/widgets/avatar.dart';
+
 class ActivityScreen extends ConsumerStatefulWidget {
   const ActivityScreen({super.key, this.isVisible = false});
+
   /// True while the Activity tab is the selected tab. The shell passes it.
   final bool isVisible;
   @override
   ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
 }
+
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
   NotificationType? _filter;
   bool _verifiedOnly = false;
+
   /// Rows that were unread when the person opened the tab. They keep their
   /// highlight until the person leaves the tab.
   final Set<String> _fresh = {};
@@ -38,6 +42,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       _fresh.clear();
     }
   }
+
   /// Remembers which rows are new, then marks every row read in the database.
   void _markRead(List<AppNotification> items) {
     final unread = items.where((item) => !item.isRead).toList();
@@ -45,6 +50,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     _fresh.addAll(unread.map((item) => item.id));
     _saveRead();
   }
+
   Future<void> _saveRead() async {
     try {
       await ref.read(notificationRepositoryProvider).markAllRead();
@@ -53,6 +59,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       // The badge corrects itself on the next realtime event.
     }
   }
+
   Future<void> _refresh() async {
     ref.invalidate(followRequestsProvider);
     ref.invalidate(activityProvider);
@@ -67,6 +74,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       if (mounted) ref.invalidate(followRequestsProvider);
     });
   }
+
   void _open(AppNotification item) {
     switch (item.type) {
       case NotificationType.follow:
@@ -80,33 +88,34 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         }
     }
   }
+
   String _verb(NotificationType type) => switch (type) {
-        NotificationType.like => 'liked your thread',
-        NotificationType.reply => 'replied to your thread',
-        NotificationType.repost => 'reposted your thread',
-        NotificationType.quote => 'quoted your thread',
-        NotificationType.mention => 'mentioned you',
-        NotificationType.follow => 'started following you',
-        NotificationType.followRequest => 'asked to follow you',
-      };
+    NotificationType.like => 'liked your thread',
+    NotificationType.reply => 'replied to your thread',
+    NotificationType.repost => 'reposted your thread',
+    NotificationType.quote => 'quoted your thread',
+    NotificationType.mention => 'mentioned you',
+    NotificationType.follow => 'started following you',
+    NotificationType.followRequest => 'asked to follow you',
+  };
   IconData _icon(NotificationType type) => switch (type) {
-        NotificationType.like => AppIcons.heart_fill,
-        NotificationType.reply => AppIcons.chat_bubble_fill,
-        NotificationType.repost => AppIcons.arrow_2_squarepath,
-        NotificationType.quote => AppIcons.quote_bubble_fill,
-        NotificationType.mention => AppIcons.at,
-        NotificationType.follow => AppIcons.person_fill,
-        NotificationType.followRequest => AppIcons.person_badge_plus_fill,
-      };
-  Color _color(BuildContext context, NotificationType type) =>
-      switch (type) {
-        NotificationType.like => context.colors.systemRed,
-        NotificationType.reply => context.colors.systemBlue,
-        NotificationType.repost => context.colors.systemGreen,
-        NotificationType.quote => context.colors.systemPurple,
-        NotificationType.mention => context.colors.systemOrange,
-        NotificationType.follow || NotificationType.followRequest => context.colors.systemIndigo,
-      };
+    NotificationType.like => AppIcons.heart_fill,
+    NotificationType.reply => AppIcons.chat_bubble_fill,
+    NotificationType.repost => AppIcons.arrow_2_squarepath,
+    NotificationType.quote => AppIcons.quote_bubble_fill,
+    NotificationType.mention => AppIcons.at,
+    NotificationType.follow => AppIcons.person_fill,
+    NotificationType.followRequest => AppIcons.person_badge_plus_fill,
+  };
+  Color _color(BuildContext context, NotificationType type) => switch (type) {
+    NotificationType.like => context.colors.systemRed,
+    NotificationType.reply => context.colors.systemBlue,
+    NotificationType.repost => context.colors.systemGreen,
+    NotificationType.quote => context.colors.systemPurple,
+    NotificationType.mention => context.colors.systemOrange,
+    NotificationType.follow ||
+    NotificationType.followRequest => context.colors.systemIndigo,
+  };
   @override
   Widget build(BuildContext context) {
     // A realtime event reloads the list. If the tab is open, the new rows are
@@ -118,7 +127,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       if (items != null) setState(() => _markRead(items));
     });
     final activity = ref.watch(activityProvider);
-    final requests = ref.watch(followRequestsProvider).value ?? const <Profile>[];
+    final requests =
+        ref.watch(followRequestsProvider).value ?? const <Profile>[];
     // skipLoadingOnReload keeps the rows on screen while a realtime reload runs.
     return activity.when<Widget>(
       skipLoadingOnReload: true,
@@ -128,12 +138,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         onRefresh: _refresh,
         slivers: [
           SliverToBoxAdapter(child: _filterBar(items)),
-          if (requests.isNotEmpty) SliverToBoxAdapter(child: _requestsRow(requests.length)),
+          if (requests.isNotEmpty)
+            SliverToBoxAdapter(child: _requestsRow(requests.length)),
           if (_visible(items).isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
-                child: Text('No activity yet.', style: TextStyle(color: context.colors.secondaryLabel)),
+                child: Text(
+                  'No activity yet.',
+                  style: TextStyle(color: context.colors.secondaryLabel),
+                ),
               ),
             )
           else
@@ -142,7 +156,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 (context, index) => Column(
                   children: [
                     _row(_visible(items)[index]),
-                    Container(height: 0.5, margin: const EdgeInsets.only(left: 74), color: context.colors.separator),
+                    Container(
+                      height: 0.5,
+                      margin: const EdgeInsets.only(left: 74),
+                      color: context.colors.separator,
+                    ),
                   ],
                 ),
                 childCount: _visible(items).length,
@@ -152,7 +170,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       ),
     );
   }
-  List<AppNotification> _visible(List<AppNotification> items) => items.where((item) {
+
+  List<AppNotification> _visible(List<AppNotification> items) =>
+      items.where((item) {
         if (_verifiedOnly && !item.actor.isVerified) return false;
         return _filter == null || item.type == _filter;
       }).toList();
@@ -174,7 +194,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         itemBuilder: (context, index) {
           final (value, label) = filters[index];
           final isVerifiedFilter = label == 'Verified';
-          final selected = isVerifiedFilter ? _verifiedOnly : (!_verifiedOnly && _filter == value);
+          final selected = isVerifiedFilter
+              ? _verifiedOnly
+              : (!_verifiedOnly && _filter == value);
           return GestureDetector(
             onTap: () => setState(() {
               _verifiedOnly = isVerifiedFilter;
@@ -183,20 +205,28 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-              color: selected ? context.colors.label : context.colors.systemGrey6,
+                color: selected
+                    ? context.colors.label
+                    : context.colors.systemGrey6,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Text(label, style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: selected ? context.colors.systemBackground : context.colors.label,
-              )),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: selected
+                      ? context.colors.systemBackground
+                      : context.colors.label,
+                ),
+              ),
             ),
           );
         },
       ),
     );
   }
+
   Widget _requestsRow(int count) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -204,23 +234,36 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: context.colors.separator, width: 0.5)),
+          border: Border(
+            bottom: BorderSide(color: context.colors.separator, width: 0.5),
+          ),
         ),
         child: Row(
           children: [
             Icon(AppIcons.person_2_fill, size: 22),
             const SizedBox(width: 12),
             const Expanded(
-              child: Text('Follow requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              child: Text(
+                'Follow requests',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
             ),
-            Text('$count', style: TextStyle(color: context.colors.secondaryLabel)),
+            Text(
+              '$count',
+              style: TextStyle(color: context.colors.secondaryLabel),
+            ),
             const SizedBox(width: 6),
-            Icon(AppIcons.chevron_forward, size: 16, color: context.colors.secondaryLabel),
+            Icon(
+              AppIcons.chevron_forward,
+              size: 16,
+              color: context.colors.secondaryLabel,
+            ),
           ],
         ),
       ),
     );
   }
+
   Widget _badge(NotificationType type) {
     return Container(
       width: 20,
@@ -233,6 +276,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       child: Icon(_icon(type), size: 11, color: context.colors.white),
     );
   }
+
   Widget _row(AppNotification item) {
     final isFresh = _fresh.contains(item.id);
     final preview = item.threadPreview;
@@ -248,7 +292,11 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Avatar(name: item.actor.name, url: item.actor.avatarUrl, size: 44),
+                Avatar(
+                  name: item.actor.name,
+                  url: item.actor.avatarUrl,
+                  size: 44,
+                ),
                 Positioned(right: -4, bottom: -4, child: _badge(item.type)),
               ],
             ),
@@ -264,13 +312,19 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                           item.actor.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         timeAgo(item.createdAt),
-                        style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: context.colors.secondaryLabel,
+                        ),
                       ),
                     ],
                   ),
@@ -282,7 +336,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                         preview,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 14, color: context.colors.secondaryLabel),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: context.colors.secondaryLabel,
+                        ),
                       ),
                     ),
                 ],
@@ -293,7 +350,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 margin: const EdgeInsets.only(left: 8, top: 6),
                 width: 9,
                 height: 9,
-                decoration: BoxDecoration(color: context.colors.activeBlue, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: context.colors.activeBlue,
+                  shape: BoxShape.circle,
+                ),
               ),
           ],
         ),

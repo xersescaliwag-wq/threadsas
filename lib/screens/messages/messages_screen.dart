@@ -26,7 +26,10 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
   @override
   Widget build(BuildContext context) {
     // A new message in any of my threads updates the inbox.
-    ref.listen(liveInboxProvider, (previous, next) => ref.invalidate(conversationsProvider));
+    ref.listen(
+      liveInboxProvider,
+      (previous, next) => ref.invalidate(conversationsProvider),
+    );
     final conversations = ref.watch(conversationsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -35,7 +38,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
           child: AppSearchField(
             placeholder: 'Search',
-            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+            onChanged: (value) =>
+                setState(() => _query = value.trim().toLowerCase()),
           ),
         ),
         Expanded(
@@ -81,7 +85,8 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
     final preview = conversation.lastMessageBody ?? '';
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => openScreen<void>(context, ChatScreen(other: conversation.other)),
+      onTap: () =>
+          openScreen<void>(context, ChatScreen(other: conversation.other)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(

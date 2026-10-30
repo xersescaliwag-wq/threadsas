@@ -78,155 +78,157 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   @override
   Widget build(BuildContext context) => AdaptiveScaffold(
     appBar: AdaptiveAppBar(title: 'Change password'),
-    body: SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 32),
-        children: [
-          Text(
-            'Create a new password',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -.4,
-              color: context.colors.label,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Text(
-            'Use a password you do not use on another account.',
-            style: TextStyle(
-              fontSize: 14,
-              color: context.colors.secondaryLabel,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'New password',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: context.colors.secondaryLabel,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Stack(
-            children: [
-              AdaptiveTextField(
-                controller: _password,
-                placeholder: 'Enter a new password',
-                obscureText: _obscurePassword,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 3,
-                ),
-                cupertinoDecoration: BoxDecoration(
-                  color: context.colors.systemGrey6,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                decoration: appFilledInputDecoration(
-                  hintText: 'Enter a new password',
-                  fillColor: context.colors.systemGrey6,
-                  borderColor: context.colors.separator,
-                  focusedBorderColor: context.colors.activeBlue,
-                  radius: 10,
-                ),
-                textInputAction: TextInputAction.next,
-                onChanged: (_) => setState(() {}),
-              ),
-              Positioned(
-                right: 2,
-                top: 0,
-                bottom: 0,
-                child: AppIconButton(
-                  padding: EdgeInsets.zero,
-                  minSize: const Size(42, 42),
-                  icon: _obscurePassword ? AppIcons.eye_slash : AppIcons.eye,
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  semanticLabel: _obscurePassword
-                      ? 'Show password'
-                      : 'Hide password',
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 7),
-            child: Text(
-              _strength,
+    body: ResponsiveContent(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(18, 22, 18, 32),
+          children: [
+            Text(
+              'Create a new password',
               style: TextStyle(
-                fontSize: 12,
-                color: _password.text.length < 8
-                    ? context.colors.secondaryLabel
-                    : context.colors.activeBlue,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -.4,
+                color: context.colors.label,
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Confirm password',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: context.colors.secondaryLabel,
+            const SizedBox(height: 7),
+            Text(
+              'Use a password you do not use on another account.',
+              style: TextStyle(
+                fontSize: 14,
+                color: context.colors.secondaryLabel,
+              ),
             ),
-          ),
-          const SizedBox(height: 7),
-          Stack(
-            children: [
-              AdaptiveTextField(
-                controller: _confirmation,
-                placeholder: 'Re-enter your new password',
-                obscureText: _obscureConfirmation,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 3,
-                ),
-                cupertinoDecoration: BoxDecoration(
-                  color: context.colors.systemGrey6,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                decoration: appFilledInputDecoration(
-                  hintText: 'Re-enter your new password',
-                  fillColor: context.colors.systemGrey6,
-                  borderColor: context.colors.separator,
-                  focusedBorderColor: context.colors.activeBlue,
-                  radius: 10,
-                ),
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _save(),
+            const SizedBox(height: 24),
+            Text(
+              'New password',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.colors.secondaryLabel,
               ),
-              Positioned(
-                right: 2,
-                top: 0,
-                bottom: 0,
-                child: AppIconButton(
-                  padding: EdgeInsets.zero,
-                  minSize: const Size(42, 42),
-                  icon: _obscureConfirmation
-                      ? AppIcons.eye_slash
-                      : AppIcons.eye,
-                  onPressed: () => setState(
-                    () => _obscureConfirmation = !_obscureConfirmation,
+            ),
+            const SizedBox(height: 7),
+            Stack(
+              children: [
+                AdaptiveTextField(
+                  controller: _password,
+                  placeholder: 'Enter a new password',
+                  obscureText: _obscurePassword,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 3,
                   ),
-                  semanticLabel: _obscureConfirmation
-                      ? 'Show password'
-                      : 'Hide password',
+                  cupertinoDecoration: BoxDecoration(
+                    color: context.colors.systemGrey6,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  decoration: appFilledInputDecoration(
+                    hintText: 'Enter a new password',
+                    fillColor: context.colors.systemGrey6,
+                    borderColor: context.colors.separator,
+                    focusedBorderColor: context.colors.activeBlue,
+                    radius: 10,
+                  ),
+                  textInputAction: TextInputAction.next,
+                  onChanged: (_) => setState(() {}),
+                ),
+                Positioned(
+                  right: 2,
+                  top: 0,
+                  bottom: 0,
+                  child: AppIconButton(
+                    padding: EdgeInsets.zero,
+                    minSize: const Size(42, 42),
+                    icon: _obscurePassword ? AppIcons.eye_slash : AppIcons.eye,
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                    semanticLabel: _obscurePassword
+                        ? 'Show password'
+                        : 'Hide password',
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: Text(
+                _strength,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _password.text.length < 8
+                      ? context.colors.secondaryLabel
+                      : context.colors.activeBlue,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          AdaptiveButton.child(
-            onPressed: _busy ? null : _save,
-            child: _busy
-                ? const AppSpinner()
-                : const Text(
-                    'Update password',
-                    style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Confirm password',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: context.colors.secondaryLabel,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Stack(
+              children: [
+                AdaptiveTextField(
+                  controller: _confirmation,
+                  placeholder: 'Re-enter your new password',
+                  obscureText: _obscureConfirmation,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 3,
                   ),
-          ),
-        ],
+                  cupertinoDecoration: BoxDecoration(
+                    color: context.colors.systemGrey6,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  decoration: appFilledInputDecoration(
+                    hintText: 'Re-enter your new password',
+                    fillColor: context.colors.systemGrey6,
+                    borderColor: context.colors.separator,
+                    focusedBorderColor: context.colors.activeBlue,
+                    radius: 10,
+                  ),
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _save(),
+                ),
+                Positioned(
+                  right: 2,
+                  top: 0,
+                  bottom: 0,
+                  child: AppIconButton(
+                    padding: EdgeInsets.zero,
+                    minSize: const Size(42, 42),
+                    icon: _obscureConfirmation
+                        ? AppIcons.eye_slash
+                        : AppIcons.eye,
+                    onPressed: () => setState(
+                      () => _obscureConfirmation = !_obscureConfirmation,
+                    ),
+                    semanticLabel: _obscureConfirmation
+                        ? 'Show password'
+                        : 'Hide password',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            AdaptiveButton.child(
+              onPressed: _busy ? null : _save,
+              child: _busy
+                  ? const AppSpinner()
+                  : const Text(
+                      'Update password',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+            ),
+          ],
+        ),
       ),
     ),
   );
