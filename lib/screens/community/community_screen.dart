@@ -105,10 +105,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     if (_loadingMore || _endReached || all.isEmpty) return;
     setState(() => _loadingMore = true);
     try {
-      final page = await ref.read(threadRepositoryProvider).fetchCommunity(
-            _id,
-            before: all.last.createdAt,
-          );
+      final page = await ref
+          .read(threadRepositoryProvider)
+          .fetchCommunity(_id, before: all.last.createdAt);
       if (!mounted) return;
       setState(() {
         _more.addAll(page);
@@ -147,101 +146,118 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             ),
         ],
       ),
-      body: headerAsync.when<Widget>(
-        loading: () => const Center(child: AppSpinner()),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (loaded) {
-          final shown = _header ?? loaded;
-          final feed = ref.watch(communityFeedProvider(_id));
-          return feed.when<Widget>(
-            loading: () => CustomScrollView(
-              slivers: [
-                _headerSliver(shown, onToggle: () => _toggleMembership(shown)),
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: AppSpinner()),
-                ),
-              ],
-            ),
-            error: (error, _) => CustomScrollView(
-              slivers: [
-                _headerSliver(shown, onToggle: () => _toggleMembership(shown)),
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(friendlyError(error), textAlign: TextAlign.center),
+      body: ResponsiveContent(
+        child: headerAsync.when<Widget>(
+          loading: () => const Center(child: AppSpinner()),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (loaded) {
+            final shown = _header ?? loaded;
+            final feed = ref.watch(communityFeedProvider(_id));
+            return feed.when<Widget>(
+              loading: () => CustomScrollView(
+                slivers: [
+                  _headerSliver(
+                    shown,
+                    onToggle: () => _toggleMembership(shown),
+                  ),
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(child: AppSpinner()),
+                  ),
+                ],
+              ),
+              error: (error, _) => CustomScrollView(
+                slivers: [
+                  _headerSliver(
+                    shown,
+                    onToggle: () => _toggleMembership(shown),
+                  ),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          friendlyError(error),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            data: (page) {
-              final all = [...page, ..._more];
-              final posts = all
-                  .where((post) =>
-                      !muted.contains(post.author.id) && !_gone.contains(post.id))
-                  .toList();
-              final hasMore = !_endReached && page.length >= _pageSize;
-              return AppRefreshView(
-                onRefresh: _refresh,
-                slivers: [
-                  _headerSliver(shown, onToggle: () => _toggleMembership(shown)),
-                  if (!shown.joinedByMe)
-                    SliverToBoxAdapter(
-                      child: _Invite(
-                        community: shown,
-                        busy: _busyMembership,
-                        onJoin: () => _toggleMembership(shown),
-                      ),
-                    )
-                  else if (posts.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _EmptyFeed(
-                        community: shown,
-                        onCompose: () => _compose(shown),
-                      ),
-                    )
-                  else
-                    SliverList(
-                      delegate: SliverChildListDelegate([
-                        for (final post in posts)
-                          Column(
-                            key: ValueKey(post.id),
-                            children: [
-                              ThreadCard(
-                                post: _current(post),
-                                onChanged: _changed,
-                                onDeleted: () =>
-                                    setState(() => _gone.add(post.id)),
-                              ),
-                              Container(
-                                height: 0.5,
-                                margin: const EdgeInsets.only(left: 68),
-                                color: context.colors.separator,
-                              ),
-                            ],
-                          ),
-                        if (hasMore)
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Center(
-                              child: _loadingMore
-                                  ? const AppSpinner()
-                                  : AdaptiveButton.child(
-                                      onPressed: () => _loadMore(all),
-                                      child: const Text('Load more'),
-                                    ),
-                            ),
-                          ),
-                      ]),
-                    ),
                 ],
-              );
-            },
-          );
-        },
+              ),
+              data: (page) {
+                final all = [...page, ..._more];
+                final posts = all
+                    .where(
+                      (post) =>
+                          !muted.contains(post.author.id) &&
+                          !_gone.contains(post.id),
+                    )
+                    .toList();
+                final hasMore = !_endReached && page.length >= _pageSize;
+                return AppRefreshView(
+                  onRefresh: _refresh,
+                  slivers: [
+                    _headerSliver(
+                      shown,
+                      onToggle: () => _toggleMembership(shown),
+                    ),
+                    if (!shown.joinedByMe)
+                      SliverToBoxAdapter(
+                        child: _Invite(
+                          community: shown,
+                          busy: _busyMembership,
+                          onJoin: () => _toggleMembership(shown),
+                        ),
+                      )
+                    else if (posts.isEmpty)
+                      SliverToBoxAdapter(
+                        child: _EmptyFeed(
+                          community: shown,
+                          onCompose: () => _compose(shown),
+                        ),
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildListDelegate([
+                          for (final post in posts)
+                            Column(
+                              key: ValueKey(post.id),
+                              children: [
+                                ThreadCard(
+                                  post: _current(post),
+                                  onChanged: _changed,
+                                  onDeleted: () =>
+                                      setState(() => _gone.add(post.id)),
+                                ),
+                                Container(
+                                  height: 0.5,
+                                  margin: const EdgeInsets.only(left: 68),
+                                  color: context.colors.separator,
+                                ),
+                              ],
+                            ),
+                          if (hasMore)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: _loadingMore
+                                    ? const AppSpinner()
+                                    : AdaptiveButton.child(
+                                        onPressed: () => _loadMore(all),
+                                        child: const Text('Load more'),
+                                      ),
+                              ),
+                            ),
+                        ]),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -319,11 +335,7 @@ class _Invite extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
       child: Column(
         children: [
-          Icon(
-            AppIcons.person_2,
-            size: 40,
-            color: context.colors.systemGrey,
-          ),
+          Icon(AppIcons.person_2, size: 40, color: context.colors.systemGrey),
           const SizedBox(height: 12),
           Text(
             community.isPrivate
@@ -333,7 +345,11 @@ class _Invite extends StatelessWidget {
             style: TextStyle(color: context.colors.secondaryLabel),
           ),
           const SizedBox(height: 16),
-          SmallButton(label: 'Join', filled: true, onPressed: busy ? null : onJoin),
+          SmallButton(
+            label: 'Join',
+            filled: true,
+            onPressed: busy ? null : onJoin,
+          ),
         ],
       ),
     );

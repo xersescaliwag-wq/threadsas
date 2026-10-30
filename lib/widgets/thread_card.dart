@@ -1,4 +1,3 @@
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -173,7 +172,12 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
       behavior: HitTestBehavior.opaque,
       onTap: _openThread,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(widget.compact ? 50 : 16, widget.compact ? 0 : 12, 16, 8),
+        padding: EdgeInsets.fromLTRB(
+          widget.compact ? 50 : 16,
+          widget.compact ? 0 : 12,
+          16,
+          8,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -246,9 +250,16 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                           ],
                         ),
                       ),
-                      AdaptiveButton.child(
-                        padding: EdgeInsets.zero,
+                      // Plain icon button: the default filled style asked iOS
+                      // for a native pill/round background, which sat off-centre
+                      // behind the three dots. Threads-style menus have no
+                      // background at all.
+                      AppIconButton(
+                        icon: AppIcons.ellipsis,
+                        size: 20,
+                        color: context.colors.secondaryLabel,
                         minSize: const Size(28, 28),
+                        semanticLabel: 'More options',
                         onPressed: () => showThreadMenu(
                           context,
                           ref: ref,
@@ -256,11 +267,6 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                           isMine: isMine,
                           onChanged: _update,
                           onDeleted: widget.onDeleted,
-                        ),
-                        child: Icon(
-                          AppIcons.ellipsis,
-                          size: 20,
-                          color: context.colors.secondaryLabel,
                         ),
                       ),
                     ],

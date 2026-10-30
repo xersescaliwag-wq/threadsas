@@ -50,10 +50,7 @@ class MediaGrid extends StatelessWidget {
           child: GestureDetector(
             onTap: () => openScreen<void>(
               context,
-              MediaViewerScreen(
-                url: url,
-                kind: kind,
-              ),
+              MediaViewerScreen(url: url, kind: kind),
             ),
             child: Stack(
               fit: StackFit.expand,
@@ -107,10 +104,7 @@ class MediaGrid extends StatelessWidget {
               child: GestureDetector(
                 onTap: () => openScreen<void>(
                   context,
-                  MediaViewerScreen(
-                    url: url,
-                    kind: kind,
-                  ),
+                  MediaViewerScreen(url: url, kind: kind),
                 ),
                 child: Stack(
                   fit: StackFit.expand,

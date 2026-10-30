@@ -11,11 +11,14 @@ import 'package:threads/providers/core_providers.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/widgets/profile_row.dart';
 import 'package:threads/widgets/small_button.dart';
+
 class FollowRequestsScreen extends ConsumerStatefulWidget {
   const FollowRequestsScreen({super.key});
   @override
-  ConsumerState<FollowRequestsScreen> createState() => _FollowRequestsScreenState();
+  ConsumerState<FollowRequestsScreen> createState() =>
+      _FollowRequestsScreenState();
 }
+
 class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen> {
   final Set<String> _answered = {};
   final Set<String> _busy = {};
@@ -40,33 +43,40 @@ class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen> {
       if (mounted) setState(() => _busy.remove(person.id));
     }
   }
+
   Future<void> _refresh() async {
     _answered.clear();
     ref.invalidate(followRequestsProvider);
     await ref.read(followRequestsProvider.future);
   }
+
   @override
   Widget build(BuildContext context) {
     final requests = ref.watch(followRequestsProvider);
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Follow requests'),
-      body: requests.when<Widget>(
-        skipLoadingOnReload: true,
-        loading: () => const Center(child: AppSpinner()),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (all) {
-          final people = all.where((person) => !_answered.contains(person.id)).toList();
-          if (people.isEmpty) {
-            return Center(
-              child: Text('No pending requests.', style: TextStyle(color: context.colors.secondaryLabel)),
-            );
-          }
-          return AppRefreshView(
-            onRefresh: _refresh,
-            slivers: [
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
+      body: ResponsiveContent(
+        child: requests.when<Widget>(
+          skipLoadingOnReload: true,
+          loading: () => const Center(child: AppSpinner()),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (all) {
+            final people = all
+                .where((person) => !_answered.contains(person.id))
+                .toList();
+            if (people.isEmpty) {
+              return Center(
+                child: Text(
+                  'No pending requests.',
+                  style: TextStyle(color: context.colors.secondaryLabel),
+                ),
+              );
+            }
+            return AppRefreshView(
+              onRefresh: _refresh,
+              slivers: [
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
                     final person = people[index];
                     final busy = _busy.contains(person.id);
                     return Column(
@@ -79,26 +89,33 @@ class _FollowRequestsScreenState extends ConsumerState<FollowRequestsScreen> {
                               SmallButton(
                                 label: 'Confirm',
                                 filled: true,
-                                onPressed: busy ? null : () => _answer(person, accept: true),
+                                onPressed: busy
+                                    ? null
+                                    : () => _answer(person, accept: true),
                               ),
                               const SizedBox(width: 8),
                               SmallButton(
                                 label: 'Delete',
-                                onPressed: busy ? null : () => _answer(person, accept: false),
+                                onPressed: busy
+                                    ? null
+                                    : () => _answer(person, accept: false),
                               ),
                             ],
                           ),
                         ),
-                        Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: context.colors.separator),
+                        Container(
+                          height: 0.5,
+                          margin: const EdgeInsets.only(left: 72),
+                          color: context.colors.separator,
+                        ),
                       ],
                     );
-                  },
-                  childCount: people.length,
+                  }, childCount: people.length),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

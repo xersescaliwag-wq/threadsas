@@ -107,86 +107,88 @@ class _TextAttachmentScreenState extends State<TextAttachmentScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                child: AdaptiveTextField(
-                  controller: _controller,
-                  autofocus: false,
-                  autocorrect: false,
-                  minLines: 1,
-                  maxLines: 12,
-                  placeholder: 'Write your text...',
-                  padding: const EdgeInsets.all(2),
-                  decoration: borderlessInputDecoration(
-                    hintText: 'Write your text...',
-                  ),
-                  cupertinoDecoration: const BoxDecoration(),
-                  style:
-                      TextStyle(
-                        fontSize: 24,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                      ).copyWith(
-                        fontWeight: _bold ? FontWeight.w900 : FontWeight.w400,
-                        fontStyle: _italic
-                            ? FontStyle.italic
-                            : FontStyle.normal,
-                        decoration: decoration,
-                      ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: SizedBox(
-                width: 200,
-                height: 45,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: context.colors.systemGrey6,
-                    border: Border.all(
-                      color: context.colors.separator,
-                      width: .5,
+      body: ResponsiveContent(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: AdaptiveTextField(
+                    controller: _controller,
+                    autofocus: false,
+                    autocorrect: false,
+                    minLines: 1,
+                    maxLines: 12,
+                    placeholder: 'Write your text...',
+                    padding: const EdgeInsets.all(2),
+                    decoration: borderlessInputDecoration(
+                      hintText: 'Write your text...',
                     ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _tool(
-                        'B',
-                        _bold,
-                        () => _toggle(() => _bold = !_bold),
-                        weight: FontWeight.w800,
-                      ),
-                      _tool(
-                        'I',
-                        _italic,
-                        () => _toggle(() => _italic = !_italic),
-                        style: FontStyle.italic,
-                      ),
-                      _tool(
-                        'U',
-                        _underline,
-                        () => _toggle(() => _underline = !_underline),
-                        decoration: TextDecoration.underline,
-                      ),
-                      _tool(
-                        'S',
-                        _strike,
-                        () => _toggle(() => _strike = !_strike),
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                    ],
+                    cupertinoDecoration: const BoxDecoration(),
+                    style:
+                        TextStyle(
+                          fontSize: 24,
+                          height: 1.25,
+                          fontWeight: FontWeight.w700,
+                        ).copyWith(
+                          fontWeight: _bold ? FontWeight.w900 : FontWeight.w400,
+                          fontStyle: _italic
+                              ? FontStyle.italic
+                              : FontStyle.normal,
+                          decoration: decoration,
+                        ),
                   ),
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: 200,
+                  height: 45,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.colors.systemGrey6,
+                      border: Border.all(
+                        color: context.colors.separator,
+                        width: .5,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _tool(
+                          'B',
+                          _bold,
+                          () => _toggle(() => _bold = !_bold),
+                          weight: FontWeight.w800,
+                        ),
+                        _tool(
+                          'I',
+                          _italic,
+                          () => _toggle(() => _italic = !_italic),
+                          style: FontStyle.italic,
+                        ),
+                        _tool(
+                          'U',
+                          _underline,
+                          () => _toggle(() => _underline = !_underline),
+                          decoration: TextDecoration.underline,
+                        ),
+                        _tool(
+                          'S',
+                          _strike,
+                          () => _toggle(() => _strike = !_strike),
+                          decoration: TextDecoration.lineThrough,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

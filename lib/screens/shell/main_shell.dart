@@ -82,6 +82,10 @@ class _MainShellState extends ConsumerState<MainShell> {
     // only where the native bar consumes it.
     final sfSymbols = PlatformInfo.isIOS26OrHigher();
     return AdaptiveScaffold(
+      // iOS 26's native tab bar shrinks to a pill while the feed scrolls. The
+      // app is a full-screen feed reader, so keep the bar at full size instead
+      // of letting it duck away mid-scroll.
+      minimizeBehavior: TabBarMinimizeBehavior.never,
       appBar: _tab == _homeTab
           ? null
           : AdaptiveAppBar(title: _titles[_tab], actions: _actions()),

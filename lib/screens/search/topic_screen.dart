@@ -12,13 +12,16 @@ import 'package:threads/providers/post_state_provider.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/providers/thread_providers.dart';
 import 'package:threads/widgets/thread_card.dart';
+
 const _pageSize = 20;
+
 class TopicScreen extends ConsumerStatefulWidget {
   const TopicScreen({super.key, required this.tag});
   final String tag;
   @override
   ConsumerState<TopicScreen> createState() => _TopicScreenState();
 }
+
 class _TopicScreenState extends ConsumerState<TopicScreen> {
   final Map<String, ThreadPost> _edits = {};
   final Set<String> _gone = {};
@@ -39,15 +42,15 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
     ref.invalidate(topicProvider(widget.tag));
     await ref.read(topicProvider(widget.tag).future);
   }
+
   /// Each page starts after the oldest post on screen.
   Future<void> _loadMore(List<ThreadPost> all) async {
     if (_loadingMore || _endReached || all.isEmpty) return;
     setState(() => _loadingMore = true);
     try {
-      final page = await ref.read(threadRepositoryProvider).fetchTopic(
-            widget.tag,
-            before: all.last.createdAt,
-          );
+      final page = await ref
+          .read(threadRepositoryProvider)
+          .fetchTopic(widget.tag, before: all.last.createdAt);
       if (!mounted) return;
       setState(() {
         _more.addAll(page);
@@ -59,70 +62,84 @@ class _TopicScreenState extends ConsumerState<TopicScreen> {
       if (mounted) setState(() => _loadingMore = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final first = ref.watch(topicProvider(widget.tag));
     final muted = ref.watch(mutedIdsProvider).value ?? const <String>{};
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: '#${widget.tag}'),
-      body: first.when<Widget>(
-        loading: () => const Center(child: AppSpinner()),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (page) {
-          final all = [...page, ..._more];
-          final posts = all
-              .where((post) => !muted.contains(post.author.id) && !_gone.contains(post.id))
-              .toList();
-          final hasMore = !_endReached && page.length >= _pageSize;
-          return AppRefreshView(
-            onRefresh: _refresh,
-            slivers: [
-              if (posts.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(
-                        'No threads use #${widget.tag} yet.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: context.colors.secondaryLabel),
-                      ),
-                    ),
-                  ),
+      body: ResponsiveContent(
+        child: first.when<Widget>(
+          loading: () => const Center(child: AppSpinner()),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (page) {
+            final all = [...page, ..._more];
+            final posts = all
+                .where(
+                  (post) =>
+                      !muted.contains(post.author.id) &&
+                      !_gone.contains(post.id),
                 )
-              else
-                SliverList(
-                  delegate: SliverChildListDelegate([
-                    for (final post in posts)
-                      Column(
-                        key: ValueKey(post.id),
-                        children: [
-                          ThreadCard(
-                            post: _current(post),
-                            onChanged: _changed,
-                            onDeleted: () => setState(() => _gone.add(post.id)),
+                .toList();
+            final hasMore = !_endReached && page.length >= _pageSize;
+            return AppRefreshView(
+              onRefresh: _refresh,
+              slivers: [
+                if (posts.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'No threads use #${widget.tag} yet.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: context.colors.secondaryLabel,
                           ),
-                          Container(height: 0.5, margin: const EdgeInsets.only(left: 68), color: context.colors.separator),
-                        ],
-                      ),
-                    if (hasMore)
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Center(
-                          child: _loadingMore
-                              ? const AppSpinner()
-                              : AdaptiveButton.child(
-                                  onPressed: () => _loadMore(all),
-                                  child: const Text('Load more'),
-                                ),
                         ),
                       ),
-                  ]),
-                ),
-            ],
-          );
-        },
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildListDelegate([
+                      for (final post in posts)
+                        Column(
+                          key: ValueKey(post.id),
+                          children: [
+                            ThreadCard(
+                              post: _current(post),
+                              onChanged: _changed,
+                              onDeleted: () =>
+                                  setState(() => _gone.add(post.id)),
+                            ),
+                            Container(
+                              height: 0.5,
+                              margin: const EdgeInsets.only(left: 68),
+                              color: context.colors.separator,
+                            ),
+                          ],
+                        ),
+                      if (hasMore)
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Center(
+                            child: _loadingMore
+                                ? const AppSpinner()
+                                : AdaptiveButton.child(
+                                    onPressed: () => _loadMore(all),
+                                    child: const Text('Load more'),
+                                  ),
+                          ),
+                        ),
+                    ]),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

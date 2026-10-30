@@ -12,13 +12,16 @@ import 'package:threads/providers/feed_providers.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/widgets/profile_row.dart';
 import 'package:threads/widgets/small_button.dart';
+
 enum AccountListKind { blocked, muted }
+
 class AccountListScreen extends ConsumerStatefulWidget {
   const AccountListScreen({super.key, required this.kind});
   final AccountListKind kind;
   @override
   ConsumerState<AccountListScreen> createState() => _AccountListScreenState();
 }
+
 class _AccountListScreenState extends ConsumerState<AccountListScreen> {
   final Set<String> _removed = {};
   final Set<String> _busy = {};
@@ -47,52 +50,72 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
       if (mounted) setState(() => _busy.remove(person.id));
     }
   }
+
   @override
   Widget build(BuildContext context) {
-    final people = _isBlocked ? ref.watch(blockedProfilesProvider) : ref.watch(mutedProfilesProvider);
+    final people = _isBlocked
+        ? ref.watch(blockedProfilesProvider)
+        : ref.watch(mutedProfilesProvider);
     return AdaptiveScaffold(
-      appBar: AdaptiveAppBar(title: _isBlocked ? 'Blocked accounts' : 'Muted accounts'),
-      body: people.when<Widget>(
-        skipLoadingOnReload: true,
-        loading: () => const Center(child: AppSpinner()),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (all) {
-          final list = all.where((person) => !_removed.contains(person.id)).toList();
-          if (list.isEmpty) {
-            return Center(
-              child: Text(
-                _isBlocked ? 'You have not blocked anyone.' : 'You have not muted anyone.',
-                style: TextStyle(color: context.colors.secondaryLabel),
-              ),
-            );
-          }
-          return ListView(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      appBar: AdaptiveAppBar(
+        title: _isBlocked ? 'Blocked accounts' : 'Muted accounts',
+      ),
+      body: ResponsiveContent(
+        child: people.when<Widget>(
+          skipLoadingOnReload: true,
+          loading: () => const Center(child: AppSpinner()),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (all) {
+            final list = all
+                .where((person) => !_removed.contains(person.id))
+                .toList();
+            if (list.isEmpty) {
+              return Center(
                 child: Text(
                   _isBlocked
-                      ? 'Blocked accounts cannot see your threads or follow you. Unblocking does not bring old follows back.'
-                      : 'Threads from muted accounts stay out of your feeds. They are not told.',
-                  style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
+                      ? 'You have not blocked anyone.'
+                      : 'You have not muted anyone.',
+                  style: TextStyle(color: context.colors.secondaryLabel),
                 ),
-              ),
-              for (final person in list)
-                Column(
-                  children: [
-                    ProfileRow(
-                      profile: person,
-                      trailing: SmallButton(
-                        label: _isBlocked ? 'Unblock' : 'Unmute',
-                        onPressed: _busy.contains(person.id) ? null : () => _undo(person),
-                      ),
+              );
+            }
+            return ListView(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: Text(
+                    _isBlocked
+                        ? 'Blocked accounts cannot see your threads or follow you. Unblocking does not bring old follows back.'
+                        : 'Threads from muted accounts stay out of your feeds. They are not told.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.colors.secondaryLabel,
                     ),
-                    Container(height: 0.5, margin: const EdgeInsets.only(left: 72), color: context.colors.separator),
-                  ],
+                  ),
                 ),
-            ],
-          );
-        },
+                for (final person in list)
+                  Column(
+                    children: [
+                      ProfileRow(
+                        profile: person,
+                        trailing: SmallButton(
+                          label: _isBlocked ? 'Unblock' : 'Unmute',
+                          onPressed: _busy.contains(person.id)
+                              ? null
+                              : () => _undo(person),
+                        ),
+                      ),
+                      Container(
+                        height: 0.5,
+                        margin: const EdgeInsets.only(left: 72),
+                        color: context.colors.separator,
+                      ),
+                    ],
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

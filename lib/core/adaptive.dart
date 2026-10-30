@@ -460,9 +460,12 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width * widthFactor;
+    // On iPhones in landscape the factor can push the panel past the
+    // comfortable reading width; cap it at a sane drawer width.
+    final panelWidth = width > 360.0 ? 360.0 : width;
     if (PlatformInfo.isIOS) {
       return Container(
-        width: width,
+        width: panelWidth,
         height: double.infinity,
         color: context.colors.systemBackground,
         // The drawer lives in the package's Material Scaffold, outside
@@ -474,7 +477,7 @@ class AppDrawer extends StatelessWidget {
       );
     }
     return material.Drawer(
-      width: width,
+      width: panelWidth,
       backgroundColor: context.colors.systemBackground,
       child: child,
     );

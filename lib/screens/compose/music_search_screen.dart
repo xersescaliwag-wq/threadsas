@@ -130,31 +130,33 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
       appBar: const AdaptiveAppBar(title: 'Add music'),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-              child: AppSearchField(
-                controller: _controller,
-                placeholder: 'Search songs or artists',
-                onChanged: _onChanged,
-                onSubmitted: _search,
-                autofocus: false,
-              ),
-            ),
-            Expanded(child: _body()),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Music powered by Audius',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.colors.secondaryLabel,
+      body: ResponsiveContent(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                child: AppSearchField(
+                  controller: _controller,
+                  placeholder: 'Search songs or artists',
+                  onChanged: _onChanged,
+                  onSubmitted: _search,
+                  autofocus: false,
                 ),
               ),
-            ),
-          ],
+              Expanded(child: _body()),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Music powered by Audius',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.colors.secondaryLabel,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

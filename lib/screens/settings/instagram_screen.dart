@@ -138,31 +138,33 @@ class _InstagramScreenState extends ConsumerState<InstagramScreen>
     final account = ref.watch(instagramAccountProvider);
     return AdaptiveScaffold(
       appBar: AdaptiveAppBar(title: 'Instagram'),
-      body: Stack(
-        children: [
-          IgnorePointer(
-            ignoring: _busy,
-            child: Opacity(
-              opacity: _busy ? 0.5 : 1,
-              child: ListView(
-                children: [
-                  account.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: AppSpinner()),
+      body: ResponsiveContent(
+        child: Stack(
+          children: [
+            IgnorePointer(
+              ignoring: _busy,
+              child: Opacity(
+                opacity: _busy ? 0.5 : 1,
+                child: ListView(
+                  children: [
+                    account.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: AppSpinner()),
+                      ),
+                      error: (error, _) => Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(friendlyError(error)),
+                      ),
+                      data: (connected) => _section(connected),
                     ),
-                    error: (error, _) => Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(friendlyError(error)),
-                    ),
-                    data: (connected) => _section(connected),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          if (_busy) const Center(child: AppSpinner(radius: 14)),
-        ],
+            if (_busy) const Center(child: AppSpinner(radius: 14)),
+          ],
+        ),
       ),
     );
   }

@@ -113,18 +113,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         useNativeToolbar: false,
         titleWidget: _headerTitle(),
       ),
-      body: conversation.when<Widget>(
-        loading: () => const _ChatSkeleton(),
-        error: (error, _) => _errorState(
-          friendlyError(error),
-          onRetry: () =>
-              ref.invalidate(conversationWithProvider(widget.other.id)),
-        ),
-        data: (id) => Column(
-          children: [
-            Expanded(child: _messages(id)),
-            _composer(id),
-          ],
+      body: ResponsiveContent(
+        child: conversation.when<Widget>(
+          loading: () => const _ChatSkeleton(),
+          error: (error, _) => _errorState(
+            friendlyError(error),
+            onRetry: () =>
+                ref.invalidate(conversationWithProvider(widget.other.id)),
+          ),
+          data: (id) => Column(
+            children: [
+              Expanded(child: _messages(id)),
+              _composer(id),
+            ],
+          ),
         ),
       ),
     );
@@ -260,7 +262,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     vertical: 10,
                   ),
                   constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(context).width * .76,
+                    // Cap the bubble at the app’s reading column so landscape
+                    // phones (where 76% of a wide screen still exceeds 600pt)
+                    // don’t stretch messages across the whole screen.
+                    maxWidth: MediaQuery.sizeOf(context).width * .76 > 480
+                        ? 480
+                        : MediaQuery.sizeOf(context).width * .76,
                   ),
                   decoration: BoxDecoration(
                     color: background,

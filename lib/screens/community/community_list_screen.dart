@@ -80,10 +80,7 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
   }
 
   Future<void> _open(Community community) async {
-    await openScreen<void>(
-      context,
-      CommunityScreen(communityId: community.id),
-    );
+    await openScreen<void>(context, CommunityScreen(communityId: community.id));
     // The screen may have joined or left, so discard the local guesses.
     if (mounted) {
       setState(_local.clear);
@@ -118,58 +115,64 @@ class _CommunityListScreenState extends ConsumerState<CommunityListScreen> {
           ),
         ],
       ),
-      body: communities.when<Widget>(
-        loading: () => const Center(child: AppSpinner()),
-        error: (error, _) => Center(child: Text(friendlyError(error))),
-        data: (all) {
-          final query = _search.text.trim().toLowerCase();
-          final shown = all
-              .where((community) =>
-                  query.isEmpty ||
-                  community.name.toLowerCase().contains(query) ||
-                  community.slug.toLowerCase().contains(query))
-              .toList();
-          return AppRefreshView(
-            onRefresh: _refresh,
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: AppSearchField(
-                    controller: _search,
-                    placeholder: 'Search communities',
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-              ),
-              if (shown.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text(
-                        'No communities yet. Tap + to start one.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: context.colors.secondaryLabel),
-                      ),
+      body: ResponsiveContent(
+        child: communities.when<Widget>(
+          loading: () => const Center(child: AppSpinner()),
+          error: (error, _) => Center(child: Text(friendlyError(error))),
+          data: (all) {
+            final query = _search.text.trim().toLowerCase();
+            final shown = all
+                .where(
+                  (community) =>
+                      query.isEmpty ||
+                      community.name.toLowerCase().contains(query) ||
+                      community.slug.toLowerCase().contains(query),
+                )
+                .toList();
+            return AppRefreshView(
+              onRefresh: _refresh,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: AppSearchField(
+                      controller: _search,
+                      placeholder: 'Search communities',
+                      onChanged: (_) => setState(() {}),
                     ),
                   ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildListDelegate([
-                    for (final community in shown)
-                      _CommunityRow(
-                        community: _current(community),
-                        onTap: () => _open(community),
-                        onToggle: () => _toggleMembership(community),
-                      ),
-                  ]),
                 ),
-            ],
-          );
-        },
+                if (shown.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text(
+                          'No communities yet. Tap + to start one.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: context.colors.secondaryLabel,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildListDelegate([
+                      for (final community in shown)
+                        _CommunityRow(
+                          community: _current(community),
+                          onTap: () => _open(community),
+                          onToggle: () => _toggleMembership(community),
+                        ),
+                    ]),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

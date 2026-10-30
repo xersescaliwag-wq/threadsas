@@ -15,12 +15,14 @@ import 'package:threads/providers/core_providers.dart';
 import 'package:threads/providers/feed_providers.dart';
 import 'package:threads/providers/social_providers.dart';
 import 'package:threads/widgets/avatar.dart';
+
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key, required this.profile});
   final Profile profile;
   @override
   ConsumerState<EditProfileScreen> createState() => _EditProfileScreenState();
 }
+
 class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   late final TextEditingController _name;
   late final TextEditingController _username;
@@ -40,6 +42,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _website = TextEditingController(text: profile.website ?? '');
     _isPrivate = profile.isPrivate;
   }
+
   @override
   void dispose() {
     _name.dispose();
@@ -48,6 +51,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _website.dispose();
     super.dispose();
   }
+
   Future<void> _pickPhoto() async {
     try {
       // Resizing keeps the upload small and well under the 5 MB bucket limit.
@@ -68,6 +72,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) await showError(context, error);
     }
   }
+
   /// Going public leaves old follow requests pending, because no trigger
   /// accepts them. Accept them here. A failure is not fatal: the person can
   /// still accept them later from Follow requests.
@@ -80,6 +85,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ref.invalidate(followRequestsProvider);
     } catch (_) {}
   }
+
   Future<void> _save() async {
     if (_busy) return;
     final username = _username.text.trim().toLowerCase();
@@ -91,8 +97,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _busy = true);
     try {
       final changedName = username != widget.profile.username;
-      if (changedName && !await ref.read(authRepositoryProvider).isUsernameAvailable(username)) {
-        if (mounted) await showMessage(context, 'Username taken', 'Choose another username.');
+      if (changedName &&
+          !await ref
+              .read(authRepositoryProvider)
+              .isUsernameAvailable(username)) {
+        if (mounted)
+          await showMessage(
+            context,
+            'Username taken',
+            'Choose another username.',
+          );
         return;
       }
       final userId = widget.profile.id;
@@ -100,7 +114,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final avatarUrl = photo == null
           ? null
           : await ref.read(mediaRepositoryProvider).uploadAvatar(userId, photo);
-      await ref.read(profileRepositoryProvider).updateProfile(
+      await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(
             userId: userId,
             username: username,
             displayName: _name.text,
@@ -109,7 +125,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             isPrivate: _isPrivate,
             avatarUrl: avatarUrl,
           );
-      if (widget.profile.isPrivate && !_isPrivate) await _acceptPendingRequests();
+      if (widget.profile.isPrivate && !_isPrivate)
+        await _acceptPendingRequests();
       ref.invalidate(myProfileProvider);
       ref.invalidate(profileByIdProvider(userId));
       // Posts on screen carry the old name and photo, so reload both feeds.
@@ -122,6 +139,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       if (mounted) setState(() => _busy = false);
     }
   }
+
   Widget _label(String text) {
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 7),
@@ -136,6 +154,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
     );
   }
+
   Widget _photo() {
     final preview = _photoPreview;
     if (preview != null) {
@@ -143,8 +162,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         child: Image.memory(preview, width: 96, height: 96, fit: BoxFit.cover),
       );
     }
-    return Avatar(name: widget.profile.name, url: widget.profile.avatarUrl, size: 96);
+    return Avatar(
+      name: widget.profile.name,
+      url: widget.profile.avatarUrl,
+      size: 96,
+    );
   }
+
   @override
   Widget build(BuildContext context) {
     // Leaving while the save runs would use a screen that no longer exists.
@@ -152,100 +176,124 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       canPop: !_busy,
       child: AdaptiveScaffold(
         appBar: AdaptiveAppBar(title: 'Edit profile'),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 36),
-            children: [
-              Center(
-                child: GestureDetector(
-                  onTap: _busy ? null : _pickPhoto,
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: context.colors.separator, width: .5),
-                        ),
-                        child: _photo(),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Change photo',
-                        style: TextStyle(color: context.colors.activeBlue, fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              _label('Name'),
-              AdaptiveTextField(
-                controller: _name,
-                placeholder: 'Your name',
-                maxLength: 50,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-              ),
-              _label('Username'),
-              AdaptiveTextField(
-                controller: _username,
-                placeholder: 'username',
-                autocorrect: false,
-                textInputAction: TextInputAction.next,
-              ),
-              _label('Bio'),
-              AdaptiveTextField(
-                controller: _bio,
-                placeholder: 'Tell people about yourself',
-                minLines: 3,
-                maxLines: 4,
-                inputFormatters: [LengthLimitingTextInputFormatter(maxBioLength)],
-                onChanged: (_) => setState(() {}),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${_bio.text.length}/$maxBioLength',
-                  style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
-                ),
-              ),
-              _label('Website'),
-              AdaptiveTextField(
-                controller: _website,
-                placeholder: 'example.com',
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                maxLength: 200,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
+        body: ResponsiveContent(
+          child: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 36),
+              children: [
+                Center(
+                  child: GestureDetector(
+                    onTap: _busy ? null : _pickPhoto,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Private account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: context.colors.separator,
+                              width: .5,
+                            ),
+                          ),
+                          child: _photo(),
+                        ),
+                        const SizedBox(height: 10),
                         Text(
-                          'New followers need your approval. People who already follow you stay.',
-                          style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
+                          'Change photo',
+                          style: TextStyle(
+                            color: context.colors.activeBlue,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  AdaptiveSwitch(
-                    value: _isPrivate,
-                    onChanged: _busy ? null : (value) => setState(() => _isPrivate = value),
+                ),
+                _label('Name'),
+                AdaptiveTextField(
+                  controller: _name,
+                  placeholder: 'Your name',
+                  maxLength: 50,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                ),
+                _label('Username'),
+                AdaptiveTextField(
+                  controller: _username,
+                  placeholder: 'username',
+                  autocorrect: false,
+                  textInputAction: TextInputAction.next,
+                ),
+                _label('Bio'),
+                AdaptiveTextField(
+                  controller: _bio,
+                  placeholder: 'Tell people about yourself',
+                  minLines: 3,
+                  maxLines: 4,
+                  inputFormatters: [
+                    LengthLimitingTextInputFormatter(maxBioLength),
+                  ],
+                  onChanged: (_) => setState(() {}),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${_bio.text.length}/$maxBioLength',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: context.colors.secondaryLabel,
+                    ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              AdaptiveButton.child(
-                onPressed: _busy ? null : _save,
-                child: _busy ? const AppSpinner() : const Text('Save'),
-              ),
-            ],
+                ),
+                _label('Website'),
+                AdaptiveTextField(
+                  controller: _website,
+                  placeholder: 'example.com',
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                  maxLength: 200,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Private account',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'New followers need your approval. People who already follow you stay.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: context.colors.secondaryLabel,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    AdaptiveSwitch(
+                      value: _isPrivate,
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(() => _isPrivate = value),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                AdaptiveButton.child(
+                  onPressed: _busy ? null : _save,
+                  child: _busy ? const AppSpinner() : const Text('Save'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
