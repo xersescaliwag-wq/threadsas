@@ -153,8 +153,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                 horizontal: 16,
                                 vertical: 14,
                               ),
-                              cupertinoDecoration: const BoxDecoration(
-                                color: CupertinoColors.transparent,
+                              cupertinoDecoration: BoxDecoration(
+                                color: context.colors.systemGrey6,
+                                borderRadius: BorderRadius.circular(6),
                               ),
                             ),
                             const SizedBox(height: 5),
@@ -170,8 +171,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                 horizontal: 16,
                                 vertical: 14,
                               ),
-                              cupertinoDecoration: const BoxDecoration(
-                                color: CupertinoColors.transparent,
+                              cupertinoDecoration: BoxDecoration(
+                                color: context.colors.systemGrey6,
+                                borderRadius: BorderRadius.circular(6),
                               ),
                             ),
                             const SizedBox(height: 5),
@@ -188,8 +190,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                 horizontal: 16,
                                 vertical: 14,
                               ),
-                              cupertinoDecoration: const BoxDecoration(
-                                color: CupertinoColors.transparent,
+                              cupertinoDecoration: BoxDecoration(
+                                color: context.colors.systemGrey6,
+                                borderRadius: BorderRadius.circular(6),
                               ),
                             ),
                             const SizedBox(height: 5),
@@ -211,8 +214,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                                     52,
                                     14,
                                   ),
-                                  cupertinoDecoration: const BoxDecoration(
-                                    color: CupertinoColors.transparent,
+                                  cupertinoDecoration: BoxDecoration(
+                                    color: context.colors.systemGrey6,
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                 ),
                                 Positioned(

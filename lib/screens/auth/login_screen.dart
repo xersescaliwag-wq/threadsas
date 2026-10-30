@@ -139,8 +139,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     horizontal: 16,
                                     vertical: 16,
                                   ),
-                                  cupertinoDecoration: const BoxDecoration(
-                                    color: CupertinoColors.transparent,
+                                  cupertinoDecoration: BoxDecoration(
+                                    color: context.colors.systemGrey6,
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                 ),
                                 const SizedBox(height: 5),
@@ -158,8 +159,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         52,
                                         16,
                                       ),
-                                      cupertinoDecoration: const BoxDecoration(
-                                        color: CupertinoColors.transparent,
+                                      cupertinoDecoration: BoxDecoration(
+                                        color: context.colors.systemGrey6,
+                                        borderRadius: BorderRadius.circular(6),
                                       ),
                                     ),
                                     Positioned(
