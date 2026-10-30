@@ -472,7 +472,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               width: double.infinity,
               child: AdaptiveButton.child(
                 onPressed: () => _editProfile(profile),
-                child: const Text('Edit profile'),
+                child: const Text(
+                  'Edit profile',
+                  style: TextStyle(
+                    color: CupertinoColors.black,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             )
           else
@@ -481,7 +487,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Expanded(
                   child: AdaptiveButton.child(
                     onPressed: () => _toggleFollow(profile, followState),
-                    child: Text(_followLabel(followState)),
+                    child: Text(
+                      _followLabel(followState),
+                      style: const TextStyle(
+                        color: CupertinoColors.black,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),

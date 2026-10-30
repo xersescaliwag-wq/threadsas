@@ -191,7 +191,13 @@ class _CreateCommunityScreenState extends ConsumerState<CreateCommunityScreen> {
                 onPressed: _busy ? null : _create,
                 child: _busy
                     ? const AppSpinner()
-                    : const Text('Create community'),
+                    : const Text(
+                        'Create community',
+                        style: TextStyle(
+                          color: CupertinoColors.black,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
             ],
           ),

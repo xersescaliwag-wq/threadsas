@@ -224,7 +224,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                   ? const AppSpinner()
                   : const Text(
                       'Update password',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF000000),
+                      ),
                     ),
             ),
           ],

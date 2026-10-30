@@ -110,7 +110,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                     ? const AppSpinner()
                     : const Text(
                         'Send reset link',
-                        style: TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF000000),
+                        ),
                       ),
               ),
             ],

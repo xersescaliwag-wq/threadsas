@@ -259,7 +259,10 @@ class _PasswordResetDialogState extends ConsumerState<PasswordResetDialog> {
                                 : _step == 1
                                 ? 'Confirm code'
                                 : 'Update password',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF000000),
+                            ),
                           ),
                   ),
                   const SizedBox(height: 4),

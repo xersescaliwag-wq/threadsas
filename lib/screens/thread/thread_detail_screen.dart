@@ -523,7 +523,10 @@ class _ReplyComposerState extends ConsumerState<_ReplyComposer> {
                       onPressed: _busy ? null : _send,
                       child: Text(
                         _busy ? 'Posting...' : 'Post',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: CupertinoColors.black,
+                        ),
                       ),
                     ),
                   ),
