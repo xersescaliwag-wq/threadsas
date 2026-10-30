@@ -35,7 +35,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: AppSearchField(
             placeholder: 'Search',
             onChanged: (value) =>
@@ -88,7 +88,7 @@ class _MessagesScreenState extends ConsumerState<MessagesScreen> {
       onTap: () =>
           openScreen<void>(context, ChatScreen(other: conversation.other)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         child: Row(
           children: [
             Avatar(

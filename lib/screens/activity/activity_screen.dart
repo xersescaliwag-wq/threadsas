@@ -187,7 +187,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     return SizedBox(
       height: 52,
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
         scrollDirection: Axis.horizontal,
         itemCount: filters.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
@@ -232,7 +232,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: () => openScreen<void>(context, const FollowRequestsScreen()),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(color: context.colors.separator, width: 0.5),
@@ -285,7 +285,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       onTap: () => _open(item),
       child: Container(
         color: isFresh ? context.colors.systemGrey6 : null,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
