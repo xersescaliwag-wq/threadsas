@@ -88,7 +88,7 @@ class _ThreadDetailScreenState extends ConsumerState<ThreadDetailScreen> {
         error: (error, _) => Center(child: Text(friendlyError(error))),
         data: (data) => data == null
             ? const Center(child: Text('This thread is no longer available.'))
-            : _buildThread(data),
+            : ResponsiveContent(child: _buildThread(data)),
       ),
     );
   }

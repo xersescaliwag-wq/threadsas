@@ -195,50 +195,57 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                 children: [
                   Row(
                     children: [
-                      Flexible(
-                        child: GestureDetector(
-                          onTap: _openProfile,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  post.author.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                      // Name and handle share the space that is left, and the
+                      // menu stays pinned to the trailing edge. A fixed gap
+                      // here squeezed both texts into an ellipsis on small
+                      // phones.
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: GestureDetector(
+                                onTap: _openProfile,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        post.author.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    if (post.author.isVerified) ...[
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        AppIcons.checkmark_seal_fill,
+                                        size: 15,
+                                        color: context.colors.activeBlue,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
-                              if (post.author.isVerified) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  AppIcons.checkmark_seal_fill,
-                                  size: 15,
-                                  color: context.colors.activeBlue,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                '@${post.author.username} · ${timeAgoLong(post.createdAt)}$edited',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.colors.secondaryLabel,
                                 ),
-                              ],
-                            ],
-                          ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          '@${post.author.username} · ${timeAgoLong(post.createdAt)}$edited',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.colors.secondaryLabel,
-                          ),
-                        ),
-                      ),
-                      widget.compact
-                          ? const Spacer()
-                          : const SizedBox(width: 150),
                       AdaptiveButton.child(
                         padding: EdgeInsets.zero,
                         minSize: const Size(28, 28),

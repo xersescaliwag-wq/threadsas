@@ -183,15 +183,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileByIdProvider(widget.userId));
     final me = ref.watch(currentUserIdProvider);
-    final body = profileAsync.when<Widget>(
-      loading: () => _profileSkeleton(),
-      error: (error, _) => Center(child: Text(friendlyError(error))),
-      data: (profile) {
-        if (profile == null) {
-          return const Center(child: Text('This account is not available.'));
-        }
-        return _buildBody(profile, isMine: profile.id == me);
-      },
+    final body = ResponsiveContent(
+      child: profileAsync.when<Widget>(
+        loading: () => _profileSkeleton(),
+        error: (error, _) => Center(child: Text(friendlyError(error))),
+        data: (profile) {
+          if (profile == null) {
+            return const Center(child: Text('This account is not available.'));
+          }
+          return _buildBody(profile, isMine: profile.id == me);
+        },
+      ),
     );
     if (!widget.showAppBar) return body;
     return AdaptiveScaffold(

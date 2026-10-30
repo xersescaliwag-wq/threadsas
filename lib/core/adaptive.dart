@@ -185,6 +185,39 @@ class AppRefreshView extends StatelessWidget {
   }
 }
 
+/// Widest a reading column is allowed to grow. Posts, chats and lists stay at
+/// this width on tablets and in landscape instead of stretching edge to edge.
+const double contentMaxWidth = 600;
+
+/// Caps [child] at [maxWidth] and centers it on wide screens. On phones, where
+/// the window is already narrower than [maxWidth], the child is returned as-is,
+/// so the layout is unchanged.
+class ResponsiveContent extends StatelessWidget {
+  const ResponsiveContent({
+    super.key,
+    required this.child,
+    this.maxWidth = contentMaxWidth,
+  });
+
+  final Widget child;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= maxWidth) return child;
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// A grouped list section: an inset grouped list on iOS, a titled group of
 /// Material list tiles on Android.
 class AppListSection extends StatelessWidget {
@@ -432,7 +465,12 @@ class AppDrawer extends StatelessWidget {
         width: width,
         height: double.infinity,
         color: context.colors.systemBackground,
-        child: child,
+        // The drawer lives in the package's Material Scaffold, outside
+        // CupertinoPageScaffold, so it does not inherit the iOS text colour.
+        child: DefaultTextStyle.merge(
+          style: TextStyle(color: context.colors.label),
+          child: child,
+        ),
       );
     }
     return material.Drawer(
@@ -622,60 +660,77 @@ class AppColors {
   bool get _isIOS => PlatformInfo.isIOS;
   material.ColorScheme get _scheme => material.Theme.of(_context).colorScheme;
 
+  /// Resolves a [CupertinoDynamicColor] against the ambient light/dark theme.
+  ///
+  /// A bare `CupertinoColors.*` value is the *light* variant. Using one
+  /// directly made iOS render white surfaces and black labels even in dark
+  /// mode — i.e. white containers/buttons and invisible text.
+  Color _cupertino(CupertinoDynamicColor color) =>
+      CupertinoDynamicColor.resolve(color, _context);
+
   // Text/label colors
-  Color get label => _isIOS ? CupertinoColors.label : _scheme.onSurface;
-  Color get secondaryLabel =>
-      _isIOS ? CupertinoColors.secondaryLabel : _scheme.onSurfaceVariant;
+  Color get label =>
+      _isIOS ? _cupertino(CupertinoColors.label) : _scheme.onSurface;
+  Color get secondaryLabel => _isIOS
+      ? _cupertino(CupertinoColors.secondaryLabel)
+      : _scheme.onSurfaceVariant;
   Color get tertiaryLabel =>
-      _isIOS ? CupertinoColors.tertiaryLabel : _scheme.outline;
+      _isIOS ? _cupertino(CupertinoColors.tertiaryLabel) : _scheme.outline;
 
   // Dividers/surfaces
   Color get separator =>
-      _isIOS ? CupertinoColors.separator : _scheme.outlineVariant;
+      _isIOS ? _cupertino(CupertinoColors.separator) : _scheme.outlineVariant;
   Color get systemBackground =>
-      _isIOS ? CupertinoColors.systemBackground : _scheme.surface;
+      _isIOS ? _cupertino(CupertinoColors.systemBackground) : _scheme.surface;
 
   // Accent/semantic colors (brand-consistent on Android)
-  Color get activeBlue => _isIOS ? CupertinoColors.activeBlue : _scheme.primary;
+  Color get activeBlue =>
+      _isIOS ? _cupertino(CupertinoColors.activeBlue) : _scheme.primary;
 
   /// Text and icons that sit on [activeBlue] (outgoing message bubbles).
   Color get onActiveBlue => _isIOS ? CupertinoColors.white : _scheme.onPrimary;
-  Color get systemBlue => _isIOS ? CupertinoColors.systemBlue : _scheme.primary;
+  Color get systemBlue =>
+      _isIOS ? _cupertino(CupertinoColors.systemBlue) : _scheme.primary;
   Color get activeGreen => _isIOS
-      ? CupertinoColors.activeGreen
+      ? _cupertino(CupertinoColors.activeGreen)
       : (material.Theme.of(_context).brightness == material.Brightness.dark
             ? material.Colors.green.shade400
             : material.Colors.green.shade600);
   Color get systemGreen => _isIOS
-      ? CupertinoColors.systemGreen
+      ? _cupertino(CupertinoColors.systemGreen)
       : (material.Theme.of(_context).brightness == material.Brightness.dark
             ? material.Colors.green.shade400
             : material.Colors.green.shade600);
-  Color get systemRed => _isIOS ? CupertinoColors.systemRed : _scheme.error;
+  Color get systemRed =>
+      _isIOS ? _cupertino(CupertinoColors.systemRed) : _scheme.error;
   Color get systemOrange => _isIOS
-      ? CupertinoColors.systemOrange
+      ? _cupertino(CupertinoColors.systemOrange)
       : (material.Theme.of(_context).brightness == material.Brightness.dark
             ? material.Colors.orange.shade300
             : material.Colors.orange.shade700);
   Color get systemPurple => _isIOS
-      ? CupertinoColors.systemPurple
+      ? _cupertino(CupertinoColors.systemPurple)
       : (material.Theme.of(_context).brightness == material.Brightness.dark
             ? material.Colors.purple.shade300
             : material.Colors.purple.shade400);
   Color get systemIndigo => _isIOS
-      ? CupertinoColors.systemIndigo
+      ? _cupertino(CupertinoColors.systemIndigo)
       : (material.Theme.of(_context).brightness == material.Brightness.dark
             ? material.Colors.indigo.shade300
             : material.Colors.indigo.shade400);
 
   // Greys
-  Color get systemGrey => _isIOS ? CupertinoColors.systemGrey : _scheme.outline;
-  Color get systemGrey4 =>
-      _isIOS ? CupertinoColors.systemGrey4 : _scheme.surfaceContainerHighest;
-  Color get systemGrey5 =>
-      _isIOS ? CupertinoColors.systemGrey5 : _scheme.surfaceContainerHighest;
-  Color get systemGrey6 =>
-      _isIOS ? CupertinoColors.systemGrey6 : _scheme.surfaceContainerHigh;
+  Color get systemGrey =>
+      _isIOS ? _cupertino(CupertinoColors.systemGrey) : _scheme.outline;
+  Color get systemGrey4 => _isIOS
+      ? _cupertino(CupertinoColors.systemGrey4)
+      : _scheme.surfaceContainerHighest;
+  Color get systemGrey5 => _isIOS
+      ? _cupertino(CupertinoColors.systemGrey5)
+      : _scheme.surfaceContainerHighest;
+  Color get systemGrey6 => _isIOS
+      ? _cupertino(CupertinoColors.systemGrey6)
+      : _scheme.surfaceContainerHigh;
 
   // Fixed
   Color get black => CupertinoColors.black;

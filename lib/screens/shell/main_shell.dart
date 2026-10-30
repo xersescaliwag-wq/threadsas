@@ -113,15 +113,17 @@ class _MainShellState extends ConsumerState<MainShell> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          const HomeScreen(),
-          const MessagesScreen(),
-          const SizedBox.shrink(),
-          ActivityScreen(isVisible: _tab == 3),
-          ProfileScreen(userId: me, showAppBar: false),
-        ],
+      body: ResponsiveContent(
+        child: IndexedStack(
+          index: _tab,
+          children: [
+            const HomeScreen(),
+            const MessagesScreen(),
+            const SizedBox.shrink(),
+            ActivityScreen(isVisible: _tab == 3),
+            ProfileScreen(userId: me, showAppBar: false),
+          ],
+        ),
       ),
     );
   }
@@ -133,6 +135,6 @@ class _SearchPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AdaptiveScaffold(
     appBar: AdaptiveAppBar(title: 'Search'),
-    body: const SearchScreen(),
+    body: const ResponsiveContent(child: SearchScreen()),
   );
 }

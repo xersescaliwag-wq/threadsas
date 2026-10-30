@@ -26,15 +26,27 @@ class MediaGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (urls.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Phones keep the 140 pt cells they have always used; the cells grow
+        // with the column on tablets and in landscape.
+        final tile = (constraints.maxWidth / 2.6)
+            .clamp(140.0, 240.0)
+            .toDouble();
+        return _grid(context, tile);
+      },
+    );
+  }
 
+  Widget _grid(BuildContext context, double tile) {
     if (urls.length == 1) {
       final url = urls[0];
       final kind = _kindAt(0);
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: SizedBox(
-          width: 140,
-          height: 140,
+          width: tile,
+          height: tile,
           child: GestureDetector(
             onTap: () => openScreen<void>(
               context,
@@ -77,7 +89,7 @@ class MediaGrid extends StatelessWidget {
     final hidden = urls.length - shown.length;
 
     return SizedBox(
-      height: 140,
+      height: tile,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
@@ -90,8 +102,8 @@ class MediaGrid extends StatelessWidget {
           return ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: SizedBox(
-              width: 140,
-              height: 140,
+              width: tile,
+              height: tile,
               child: GestureDetector(
                 onTap: () => openScreen<void>(
                   context,
