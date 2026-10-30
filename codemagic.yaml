@@ -23,6 +23,7 @@ workflows:
       xcode: latest
 
 
+
     scripts:
       - name: Get Flutter dependencies
         script: flutter packages pub get
