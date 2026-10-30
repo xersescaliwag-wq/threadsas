@@ -1,7 +1,7 @@
 // lib/screens/compose/compose_screen.dart
 import 'dart:io';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:threads/core/adaptive.dart';
@@ -22,6 +22,8 @@ import 'package:threads/providers/instagram_providers.dart';
 import 'package:threads/providers/thread_providers.dart';
 import 'package:threads/screens/compose/gif_search_sheet.dart';
 import 'package:threads/screens/compose/music_search_screen.dart';
+import 'package:threads/screens/compose/drafts_screen.dart';
+import 'package:threads/screens/compose/text_attachment_screen.dart';
 import 'package:threads/widgets/avatar.dart';
 import 'package:threads/widgets/music_sticker.dart';
 import 'package:threads/widgets/quote_card.dart';
@@ -35,12 +37,14 @@ class ComposeScreen extends ConsumerStatefulWidget {
     this.quoting,
     this.editing,
     this.community,
+    this.initialContent,
   });
   final ThreadPost? replyTo; // the post a reply belongs to
   final ThreadPost? quoting; // the post a quote shows inside it
   final ThreadPost? editing; // the post whose text and settings change
   final Community?
   community; // when posting from inside a community (Step 21.5)
+  final String? initialContent;
   @override
   ConsumerState<ComposeScreen> createState() => _ComposeScreenState();
 }
@@ -66,8 +70,11 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   /// The poll durations offered, in the order the segmented control shows them.
   static const List<int> _pollDayValues = [1, 3, 7];
   bool _busy = false;
+  bool _uploading = false;
+  double _uploadProgress = 0;
   bool _optionsVisible = false;
-  bool _reviewReplies = false;
+  bool _quickToolsVisible = false;
+  Map<String, dynamic> _textFormatting = const {};
 
   /// Whether the post should also be shared to Instagram (Step 21.6). It is
   /// only offered when an Instagram account is connected and there is a photo
@@ -89,7 +96,9 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
   void initState() {
     super.initState();
     final editing = widget.editing;
-    _text = TextEditingController(text: editing?.content ?? '');
+    _text = TextEditingController(
+      text: editing?.content ?? widget.initialContent ?? '',
+    );
     _replyControl = editing?.replyControl ?? ReplyControl.everyone;
     _hideLikes = editing?.hideLikeCount ?? false;
     _community = widget.community;
@@ -127,6 +136,136 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     }
     return null;
   }
+
+  bool get _hasComposerContent =>
+      _text.text.trim().isNotEmpty ||
+      _media.isNotEmpty ||
+      _gifs.isNotEmpty ||
+      _music != null ||
+      _pollOn;
+
+  Future<void> _handleComposerClose() async {
+    if (!_hasComposerContent) {
+      if (mounted) Navigator.of(context).pop();
+      return;
+    }
+    final action = await showAppOverlayDialog<String>(
+      context,
+      barrierDismissible: true, // tap sa labas = Continue editing
+      barrierColor: const Color(0x80000000),
+      builder: (dialogContext) => DefaultTextStyle(
+        // Ito ang ayos sa font: ang dialog route ay walang text style na
+        // namamana, kaya dati nagiging ibang font / may underline. Ngayon SF
+        // (system font) na ang gamit ng lahat ng text sa loob.
+        style: DefaultTextStyle.of(dialogContext).style,
+        child: Center(
+          child: Container(
+            width: 292,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: context.colors.systemGrey6,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Save to drafts',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: context.colors.label,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -.3,
+                          height: 1.2,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Save to drafts to edit and post\nat a later time',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: context.colors.secondaryLabel,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -.08,
+                          height: 1.3,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _closeChoice(
+                  dialogContext,
+                  'Save',
+                  'save',
+                  weight: FontWeight.w700,
+                ),
+                _closeChoice(
+                  dialogContext,
+                  "Don't save",
+                  'discard',
+                  color: context.colors.systemRed,
+                ),
+                _closeChoice(dialogContext, 'Continue editing', 'continue'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || action == null || action == 'continue') return;
+    if (action == 'save') {
+      await _saveDraft();
+    } else if (action == 'discard') {
+      Navigator.of(context).pop();
+    }
+  }
+
+  /// One full-width row of the close dialog, with a hairline above it.
+  Widget _closeChoice(
+    BuildContext dialogContext,
+    String label,
+    String value, {
+    Color? color,
+    FontWeight weight = FontWeight.w400,
+  }) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(height: .5, color: context.colors.separator),
+      SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: AdaptiveButton.child(
+          style: AdaptiveButtonStyle.plain,
+          color: color ?? context.colors.label,
+          minSize: const Size(0, 50),
+          padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.zero,
+          onPressed: () => Navigator.of(dialogContext).pop(value),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: weight,
+              letterSpacing: -.2,
+              color: color ?? context.colors.label,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
 
   PollDraft? _pollDraft() {
     if (!_pollOn) return null;
@@ -174,6 +313,7 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
       ];
       final created = await threads.createThread(
         content: _text.text,
+        textFormatting: _textFormatting,
         mediaUrls: mediaUrls,
         mediaKinds: mediaKinds,
         parentId: widget.replyTo?.id,
@@ -212,16 +352,245 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     }
   }
 
+  Future<void> _saveDraft() async {
+    if (_busy ||
+        (_text.text.trim().isEmpty &&
+            _media.isEmpty &&
+            _gifs.isEmpty &&
+            _music == null)) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(draftRepositoryProvider)
+          .save(
+            content: _text.text,
+            mediaUrls: [for (final gif in _gifs) gif.fullUrl],
+            mediaKinds: [for (final _ in _gifs) 'gif'],
+            metadata: {
+              if (_music != null) 'music_id': _music!.id,
+              'reply_control': _replyControl.name,
+              'hide_like_count': _hideLikes,
+            },
+          );
+      if (mounted) {
+        await showMessage(
+          context,
+          'Draft saved',
+          'You can finish it later from your drafts.',
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) await showError(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Uploads the photos and videos in order. Returns their public addresses.
   Future<List<String>> _uploadMedia() async {
     if (_media.isEmpty) return const [];
     final userId = ref.read(currentUserIdProvider) ?? '';
     final media = ref.read(mediaRepositoryProvider);
     final urls = <String>[];
-    for (var i = 0; i < _media.length; i++) {
-      urls.add(await media.uploadThreadMedia(userId, _media[i], i));
+    if (mounted)
+      setState(() {
+        _uploading = true;
+        _uploadProgress = 0;
+      });
+    try {
+      for (var i = 0; i < _media.length; i++) {
+        urls.add(await media.uploadThreadMedia(userId, _media[i], i));
+        if (mounted) setState(() => _uploadProgress = (i + 1) / _media.length);
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
     return urls;
+  }
+
+  Future<void> _showEmojiPicker() async {
+    const emojis = [
+      '😀',
+      '😃',
+      '😄',
+      '😁',
+      '😆',
+      '😅',
+      '😂',
+      '🤣',
+      '🥹',
+      '😊',
+      '😍',
+      '🥰',
+      '😘',
+      '😎',
+      '🤓',
+      '🥳',
+      '🤍',
+      '🖤',
+      '❤️',
+      '💛',
+      '💚',
+      '💙',
+      '💜',
+      '🔥',
+      '✨',
+      '⭐',
+      '💫',
+      '🙌',
+      '👏',
+      '👍',
+      '👎',
+      '🙏',
+      '💯',
+      '🎉',
+      '🎊',
+      '🌈',
+      '☀️',
+      '🌙',
+      '☕',
+      '🍕',
+      '🍔',
+      '🍓',
+      '🌱',
+      '🚀',
+      '📸',
+      '🎵',
+      '🎬',
+      '⚡',
+    ];
+    final search = TextEditingController();
+    await showAppModalSheet<void>(
+      context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final query = search.text.trim().toLowerCase();
+          final shown = query.isEmpty
+              ? emojis
+              : emojis.where((emoji) => emoji.contains(query)).toList();
+          final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+          final sheetHeight =
+              (MediaQuery.sizeOf(context).height - keyboard - 24).clamp(
+                260.0,
+                360.0,
+              );
+          return Container(
+            height: sheetHeight,
+            color: context.colors.systemBackground,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: context.colors.systemGrey,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  AdaptiveTextField(
+                    controller: search,
+                    placeholder: 'Search emoji',
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: appFilledInputDecoration(
+                      hintText: 'Search emoji',
+                      fillColor: context.colors.systemGrey6,
+                      borderColor: context.colors.separator,
+                      focusedBorderColor: context.colors.activeBlue,
+                      radius: 12,
+                    ),
+                    cupertinoDecoration: BoxDecoration(
+                      color: context.colors.systemGrey6,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefix: Padding(
+                      padding: EdgeInsets.only(left: 12, right: 8),
+                      child: Icon(AppIcons.search, size: 18),
+                    ),
+                    suffix: search.text.isEmpty
+                        ? null
+                        : AppIconButton(
+                            padding: EdgeInsets.zero,
+                            minSize: const Size(36, 36),
+                            icon: AppIcons.xmark_circle_fill,
+                            size: 18,
+                            onPressed: () {
+                              search.clear();
+                              setSheetState(() {});
+                            },
+                            semanticLabel: 'Clear emoji search',
+                          ),
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final emoji in shown)
+                            SizedBox(
+                              width: 34,
+                              height: 34,
+                              child: GestureDetector(
+                                onTap: () {
+                                  final value = _text.value;
+                                  final start = value.selection.isValid
+                                      ? value.selection.start
+                                      : value.text.length;
+                                  final end = value.selection.isValid
+                                      ? value.selection.end
+                                      : value.text.length;
+                                  final next = value.text.replaceRange(
+                                    start,
+                                    end,
+                                    emoji,
+                                  );
+                                  _text.value = value.copyWith(
+                                    text: next,
+                                    selection: TextSelection.collapsed(
+                                      offset: start + emoji.length,
+                                    ),
+                                  );
+                                  setState(() {});
+                                  Navigator.of(context).pop();
+                                },
+                                child: Center(
+                                  child: Text(
+                                    emoji,
+                                    style: const TextStyle(
+                                      fontSize: 25,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    search.dispose();
   }
 
   /// Refreshes only the screens that can show the new post.
@@ -556,148 +925,215 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
         : ref.watch(profileByIdProvider(userId)).value;
     return AdaptiveScaffold(
       body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _composerHeader(title),
-                Container(height: 0.5, color: context.colors.separator),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 120),
-                    children: [
-                      if (replyTo != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            'Replying to @${replyTo.author.username}',
-                            style: TextStyle(
-                              color: context.colors.secondaryLabel,
+        child: SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Column(
+                children: [
+                  _composerHeader(title),
+                  Container(height: 0.5, color: context.colors.separator),
+                  Expanded(
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        18,
+                        20,
+                        18,
+                        120 + MediaQuery.viewInsetsOf(context).bottom,
+                      ),
+                      children: [
+                        if (replyTo != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              'Replying to @${replyTo.author.username}',
+                              style: TextStyle(
+                                color: context.colors.secondaryLabel,
+                              ),
                             ),
                           ),
-                        ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Avatar(
-                            name: profile?.name ?? 'You',
-                            url: profile?.avatarUrl,
-                            size: 58,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      profile?.username ?? 'you',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '›',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        color: context.colors.secondaryLabel,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Expanded(
-                                      child: Text(
-                                        _community?.name ??
-                                            'Community or topic',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Avatar(
+                              name: profile?.name ?? 'You',
+                              url: profile?.avatarUrl,
+                              size: 58,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        profile?.username ?? 'you',
+                                        style: const TextStyle(
                                           fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '›',
+                                        style: TextStyle(
+                                          fontSize: 24,
                                           color: context.colors.secondaryLabel,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                AdaptiveTextField(
-                                  controller: _text,
-                                  autofocus: true,
-                                  minLines: 2,
-                                  maxLines: null,
-                                  maxLength: maxThreadLength,
-                                  placeholder: _isReply
-                                      ? 'Write your reply'
-                                      : "What's new?",
-                                  padding: const EdgeInsets.only(
-                                    top: 8,
-                                    bottom: 14,
+                                      const SizedBox(width: 5),
+                                      Expanded(
+                                        child: Text(
+                                          _community?.name ??
+                                              'Community or topic',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color:
+                                                context.colors.secondaryLabel,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  cupertinoDecoration: const BoxDecoration(),
-                                  decoration: borderlessInputDecoration(
-                                    hintText: _isReply
+                                  AdaptiveTextField(
+                                    controller: _text,
+                                    autofocus: false,
+                                    minLines: 2,
+                                    maxLines: null,
+                                    maxLength: maxThreadLength,
+                                    placeholder: _isReply
                                         ? 'Write your reply'
                                         : "What's new?",
-                                    contentPadding: const EdgeInsets.only(
+                                    padding: const EdgeInsets.only(
                                       top: 8,
                                       bottom: 14,
                                     ),
+                                    cupertinoDecoration: BoxDecoration(
+                                      color: context.colors.systemGrey6,
+                                    ),
+                                    decoration:
+                                        borderlessInputDecoration(
+                                          hintText: _isReply
+                                              ? 'Write your reply'
+                                              : "What's new?",
+                                          contentPadding: const EdgeInsets.only(
+                                            top: 8,
+                                            bottom: 14,
+                                          ),
+                                        ).copyWith(
+                                          filled: true,
+                                          fillColor: context.colors.systemGrey6,
+                                        ),
+                                    onChanged: (_) => setState(() {}),
                                   ),
-                                  onChanged: (_) => setState(() {}),
-                                ),
-                                if (canAddAttachments) _attachmentRow(),
-                                if (!_isEditing) ...[
-                                  const SizedBox(height: 12),
-                                  _mediaStrip(),
+                                  if (canAddAttachments) ...[_attachmentRow()],
+                                  if (!_isEditing) ...[
+                                    const SizedBox(height: 12),
+                                    _mediaStrip(),
+                                    if (_pollOn) ...[
+                                      const SizedBox(height: 16),
+                                      _pollSection(),
+                                    ],
+                                  ],
+                                  if (quoting != null) ...[
+                                    const SizedBox(height: 12),
+                                    QuoteCard(post: quoting, onTap: () {}),
+                                  ],
                                 ],
-                                if (quoting != null) ...[
-                                  const SizedBox(height: 12),
-                                  QuoteCard(post: quoting, onTap: () {}),
-                                ],
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Row(
-                        children: [
-                          Opacity(
-                            opacity: .38,
-                            child: Avatar(name: 'Add', size: 30),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Add to thread',
-                            style: TextStyle(
-                              color: context.colors.secondaryLabel,
+                          ],
+                        ),
+                        const SizedBox(height: 28),
+                        Row(
+                          children: [
+                            Opacity(
+                              opacity: .38,
+                              child: Avatar(name: 'Add', size: 30),
                             ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Add to thread',
+                              style: TextStyle(
+                                color: context.colors.secondaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Positioned(
+                top: 72,
+                right: 16,
+                child: IgnorePointer(
+                  ignoring: !_quickToolsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _quickToolsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOut,
+                    child: AnimatedScale(
+                      scale: _quickToolsVisible ? 1 : .94,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      alignment: Alignment.topRight,
+                      child: _managePostsDropdown(),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  ignoring: !_optionsVisible,
+                  child: AnimatedOpacity(
+                    opacity: _optionsVisible ? 1 : 0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _optionsVisible = false),
+                      child: const ColoredBox(color: Color(0xB9000000)),
+                    ),
+                  ),
+                ),
+              ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: IgnorePointer(
+                  ignoring: !_optionsVisible,
+                  child: AnimatedSlide(
+                    offset: _optionsVisible ? Offset.zero : const Offset(0, 1),
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    child: _postOptionsSheet(),
+                  ),
+                ),
+              ),
+              if (!_optionsVisible)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_uploading)
+                        Container(
+                          height: 4,
+                          alignment: Alignment.centerLeft,
+                          color: context.colors.systemGrey5,
+                          child: FractionallySizedBox(
+                            widthFactor: _uploadProgress.clamp(0, 1),
+                            child: ColoredBox(color: context.colors.activeBlue),
                           ),
-                        ],
-                      ),
+                        ),
+                      _composerFooter(canPost: canPost, label: buttonLabel),
                     ],
                   ),
                 ),
-              ],
-            ),
-            if (_optionsVisible) ...[
-              Positioned.fill(
-                child: GestureDetector(
-                  onTap: () => setState(() => _optionsVisible = false),
-                  child: const ColoredBox(color: Color(0xB9000000)),
-                ),
-              ),
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: _postOptionsSheet(),
-              ),
             ],
-            if (!_optionsVisible)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: _composerFooter(canPost: canPost, label: buttonLabel),
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -705,34 +1141,277 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
 
   Widget _composerHeader(String title) => Padding(
     padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-    child: Row(
+    child: Stack(
+      clipBehavior: Clip.none,
       children: [
-        GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
-          child: Icon(AppIcons.xmark, size: 31),
-        ),
-        const SizedBox(width: 24),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w700),
-          ),
+        Row(
+          children: [
+            GestureDetector(
+              onTap: _handleComposerClose,
+              child: Icon(AppIcons.xmark, size: 31),
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (!_isEditing && !_isReply && widget.quoting == null)
+              GestureDetector(
+                onTap: () =>
+                    setState(() => _quickToolsVisible = !_quickToolsVisible),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    AppIcons.ellipsis,
+                    color: context.colors.secondaryLabel,
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     ),
   );
 
+  Widget _managePostsDropdown() => Container(
+    width: 130,
+    height: 120,
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    decoration: BoxDecoration(
+      color: context.colors.systemBackground,
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: context.colors.separator, width: .5),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x26000000),
+          blurRadius: 12,
+          offset: Offset(0, 5),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _managePostRow(
+          context,
+          'Save',
+          AppIcons.bookmark,
+          'save',
+          onTap: () {
+            setState(() => _quickToolsVisible = false);
+            _saveDraft();
+          },
+        ),
+        _managePostRow(
+          context,
+          'Drafts',
+          AppIcons.square_pencil,
+          'drafts',
+          onTap: () {
+            setState(() => _quickToolsVisible = false);
+            openScreen<void>(context, const DraftsScreen());
+          },
+        ),
+      ],
+    ),
+  );
+
+  Future<String?> _showManagePostsSheet() => showAppOverlayDialog<String>(
+    context,
+    builder: (sheetContext) => SafeArea(
+      child: Align(
+        alignment: Alignment.topRight,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 72, right: 12),
+          child: Container(
+            width: 130,
+            height: 120,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: context.colors.systemBackground,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: context.colors.separator, width: .5),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _managePostRow(sheetContext, 'Save', AppIcons.bookmark, 'save'),
+                _managePostRow(
+                  sheetContext,
+                  'Drafts',
+                  AppIcons.square_pencil,
+                  'drafts',
+                ),
+                _managePostRow(
+                  sheetContext,
+                  'Schedule',
+                  AppIcons.clock,
+                  'scheduled',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _managePostRow(
+    BuildContext sheetContext,
+    String label,
+    IconData icon,
+    String value, {
+    VoidCallback? onTap,
+  }) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap ?? () => Navigator.pop(sheetContext, value),
+    child: Padding(
+      padding: EdgeInsets.zero,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 80,
+            height: 30,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: context.colors.label,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: Icon(icon, size: 18, color: context.colors.secondaryLabel),
+          ),
+        ],
+      ),
+    ),
+  );
+
   Widget _attachmentRow() => Row(
+    mainAxisSize: MainAxisSize.min,
     children: [
       _attachmentButton(AppIcons.photo_on_rectangle, _pickMedia),
       _attachmentButton(null, _pickGif, label: 'GIF'),
       _attachmentButton(AppIcons.music_note, _pickMusic),
-      _attachmentButton(AppIcons.smiley, () {}),
-      _attachmentButton(
-        AppIcons.ellipsis,
-        () => setState(() => _optionsVisible = true),
-      ),
     ],
+  );
+
+  Widget _quickToolsMenu() => Align(
+    alignment: Alignment.topRight,
+    child: SizedBox(
+      width: 170,
+      height: 160,
+      child: Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: context.colors.systemGrey6,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: context.colors.separator, width: .5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _quickTool('Text', AppIcons.pencil, () async {
+              setState(() => _quickToolsVisible = false);
+              final result = await Navigator.of(context)
+                  .push<TextAttachmentResult>(
+                    adaptivePageRoute<TextAttachmentResult>(
+                      (_) => TextAttachmentScreen(initialText: _text.text),
+                    ),
+                  );
+              if (result != null && mounted) {
+                setState(() {
+                  _text.text = result.text;
+                  _textFormatting = {
+                    if (result.bold) 'bold': true,
+                    if (result.italic) 'italic': true,
+                    if (result.underline) 'underline': true,
+                    if (result.strikethrough) 'strikethrough': true,
+                  };
+                });
+              }
+            }),
+            _quickTool('Quote', AppIcons.quote_bubble_fill, () {
+              setState(() => _quickToolsVisible = false);
+              if (widget.quoting == null) {
+                showMessage(
+                  context,
+                  'Quote a post',
+                  'Open a post and choose Quote to attach it here.',
+                );
+              }
+            }),
+            _quickTool('Poll', AppIcons.slider_horizontal_3, () {
+              setState(() {
+                _quickToolsVisible = false;
+                _pollOn = true;
+              });
+            }),
+            _quickTool('Location', AppIcons.pin_fill, null, disabled: true),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _quickTool(
+    String label,
+    IconData icon,
+    VoidCallback? onTap, {
+    bool disabled = false,
+  }) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: disabled ? null : onTap,
+    child: Opacity(
+      opacity: disabled ? .45 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        child: SizedBox(
+          height: 30,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (disabled)
+                Text(
+                  'Soon',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: context.colors.secondaryLabel,
+                  ),
+                )
+              else
+                Icon(icon, size: 19, color: context.colors.label),
+            ],
+          ),
+        ),
+      ),
+    ),
   );
 
   Widget _attachmentButton(
@@ -743,13 +1422,13 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
     behavior: HitTestBehavior.opaque,
     onTap: onTap,
     child: SizedBox(
-      width: 48,
-      height: 44,
+      width: label != null || icon == AppIcons.music_note ? 36 : 40,
+      height: label != null || icon == AppIcons.music_note ? 36 : 40,
       child: Center(
         child: icon == null
             ? Container(
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   border: Border.all(
@@ -767,145 +1446,157 @@ class _ComposeScreenState extends ConsumerState<ComposeScreen> {
                   ),
                 ),
               )
-            : Icon(icon, size: 28, color: context.colors.secondaryLabel),
+            : Icon(
+                icon,
+                size: label != null || icon == AppIcons.music_note ? 24 : 28,
+                color: context.colors.secondaryLabel,
+              ),
       ),
     ),
   );
 
-  Widget _postOptionsSheet() => Container(
-    padding: const EdgeInsets.fromLTRB(28, 9, 28, 18),
-    decoration: BoxDecoration(
-      color: const Color(0xFF292929),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Container(
-            width: 44,
-            height: 4,
-            decoration: BoxDecoration(
-              color: context.colors.secondaryLabel,
-              borderRadius: BorderRadius.circular(8),
-            ),
+  Widget _postOptionsSheet() {
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final maxHeight = (MediaQuery.sizeOf(context).height - keyboard - 72).clamp(
+      220.0,
+      560.0,
+    );
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        decoration: BoxDecoration(
+          color: context.colors.systemBackground,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+          border: Border(
+            top: BorderSide(color: context.colors.separator, width: .5),
           ),
         ),
-        const SizedBox(height: 18),
-        const Text(
-          'Post options',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 26),
-        Text(
-          'Who can reply and quote',
-          style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
-        ),
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF343434),
-            borderRadius: BorderRadius.circular(24),
-          ),
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _replyChoice('Your followers', ReplyControl.everyone),
-              _optionDivider(),
-              _replyChoice('Profiles you follow', ReplyControl.following),
-              _optionDivider(),
-              _replyChoice('Profiles that you mention', ReplyControl.mentioned),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFF343434),
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Review and approve replies',
-                  style: TextStyle(fontSize: 15),
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.colors.secondaryLabel,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
-              AdaptiveSwitch(
-                value: _reviewReplies,
-                onChanged: (value) => setState(() => _reviewReplies = value),
+              const SizedBox(height: 18),
+              const Text(
+                'Post options',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'Audience',
-          style: TextStyle(fontSize: 13, color: context.colors.secondaryLabel),
-        ),
-        const SizedBox(height: 10),
-        GestureDetector(
-          onTap: _canCrosspost
-              ? () => setState(() => _crosspost = !_crosspost)
-              : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF343434),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 26),
+              Text(
+                'Who can reply',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.secondaryLabel,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                decoration: BoxDecoration(
+                  color: context.colors.systemGrey6,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Column(
+                  children: [
+                    _replyChoice('Everyone', ReplyControl.everyone),
+                    _optionDivider(),
+                    _replyChoice('Profiles you follow', ReplyControl.following),
+                    _optionDivider(),
+                    _replyChoice(
+                      'Profiles that you mention',
+                      ReplyControl.mentioned,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Audience',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.secondaryLabel,
+                ),
+              ),
+              const SizedBox(height: 10),
+              GestureDetector(
+                onTap: _canCrosspost
+                    ? () => setState(() => _crosspost = !_crosspost)
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: context.colors.systemGrey6,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
                     children: [
-                      const Text(
-                        'Also share on',
-                        style: TextStyle(fontSize: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Also share on',
+                              style: TextStyle(fontSize: 15),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _crosspost ? 'Instagram' : 'Off',
+                              style: TextStyle(
+                                color: context.colors.secondaryLabel,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        _crosspost ? 'Instagram' : 'Off',
-                        style: TextStyle(color: context.colors.secondaryLabel),
+                      Icon(
+                        AppIcons.chevron_right,
+                        color: context.colors.secondaryLabel,
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  AppIcons.chevron_right,
-                  color: context.colors.secondaryLabel,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        GestureDetector(
-          onTap: () => setState(() => _optionsVisible = false),
-          child: Container(
-            height: 50,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: context.colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              'Done',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: context.colors.black,
               ),
-            ),
+              const SizedBox(height: 18),
+              GestureDetector(
+                onTap: () => setState(() => _optionsVisible = false),
+                child: Container(
+                  height: 50,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: context.colors.label,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: context.colors.systemBackground,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   Widget _optionDivider() => Container(
     height: .5,

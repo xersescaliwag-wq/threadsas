@@ -13,7 +13,7 @@ class ThreadRepository {
 
   /// Every thread query uses this select. It joins the author, the quoted post and the poll.
   static const _threadSelect =
-      'id, author_id, content, media_urls, media_kinds, parent_id, root_id, quote_id, community_id, hashtags, mentions, reply_control, hide_like_count, is_pinned, expires_at, like_count, reply_count, repost_count, quote_count, edited_at, created_at, updated_at, music_id, music_title, music_artist, music_artwork_url, music_permalink, music_duration_seconds, music_clip_start_seconds, '
+      'id, author_id, content, text_formatting, media_urls, media_kinds, parent_id, root_id, quote_id, community_id, hashtags, mentions, reply_control, hide_like_count, is_pinned, expires_at, like_count, reply_count, repost_count, quote_count, edited_at, created_at, updated_at, music_id, music_title, music_artist, music_artwork_url, music_permalink, music_duration_seconds, music_clip_start_seconds, '
       'author:profiles!threads_author_id_fkey(id, username, display_name, bio, avatar_url, is_private, is_verified), '
       // The quote embed is threads -> threads (self-referential). PostgREST only
       // resolves the hint by the column here; its suggested constraint-name hint fails with PGRST200.
@@ -80,7 +80,7 @@ class ThreadRepository {
   }
 
   // ---------- Profile tabs ----------
-  /// One profile tab: 'threads', 'replies' or 'reposts'. Pinned posts are fetched separately.
+  /// One profile tab: 'threads', 'replies', 'media' or 'reposts'.
   Future<List<ThreadPost>> fetchByAuthor(
     String authorId, {
     required String tab,
@@ -95,6 +95,9 @@ class ThreadRepository {
       query = query.not('parent_id', 'is', null);
     } else {
       query = query.isFilter('parent_id', null).eq('is_pinned', false);
+    }
+    if (tab == 'media') {
+      query = query.not('media_urls', 'eq', '{}');
     }
     if (before != null) {
       query = query.lt('created_at', before.toUtc().toIso8601String());
@@ -186,6 +189,7 @@ class ThreadRepository {
   /// Creates a post, a reply or a quote. A poll is created after the post. If the poll fails, the post is removed.
   Future<ThreadPost> createThread({
     required String content,
+    Map<String, dynamic> textFormatting = const {},
     List<String> mediaUrls = const [],
     List<String> mediaKinds = const [],
     String? parentId,
@@ -200,6 +204,7 @@ class ThreadRepository {
     final payload = <String, Object?>{
       'author_id': _me,
       'content': content.trim(),
+      'text_formatting': textFormatting,
       'media_urls': mediaUrls,
       'media_kinds': mediaKinds,
       'parent_id': parentId,

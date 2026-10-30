@@ -1,7 +1,6 @@
 // lib/screens/search/search_screen.dart
 import 'dart:async';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:threads/core/adaptive.dart';
@@ -15,14 +14,17 @@ import 'package:threads/providers/social_providers.dart';
 import 'package:threads/screens/search/topic_screen.dart';
 import 'package:threads/widgets/profile_row.dart';
 import 'package:threads/widgets/thread_card.dart';
+
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
   @override
   ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
+
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _controller = TextEditingController();
   final Set<String> _gone = {};
+  final List<String> _recentSearches = [];
   Timer? _debounce;
   String _query = '';
   int _mode = 0; // 0 People, 1 Threads, 2 Topics
@@ -32,6 +34,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _controller.dispose();
     super.dispose();
   }
+
   /// Waits for a pause in typing, so each key press does not run a query.
   void _onChanged(String value) {
     _debounce?.cancel();
@@ -39,10 +42,19 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       if (mounted) setState(() => _query = value.trim());
     });
   }
+
   void _onSubmitted(String value) {
     _debounce?.cancel();
-    setState(() => _query = value.trim());
+    final query = value.trim();
+    if (query.isEmpty) return;
+    setState(() {
+      _query = query;
+      _recentSearches.remove(query);
+      _recentSearches.insert(0, query);
+      if (_recentSearches.length > 6) _recentSearches.removeLast();
+    });
   }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -50,11 +62,25 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: AppSearchField(
-            controller: _controller,
-            placeholder: 'Search',
-            onChanged: _onChanged,
-            onSubmitted: _onSubmitted,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Explore',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              AppSearchField(
+                controller: _controller,
+                placeholder: 'Search people, threads, or topics',
+                onChanged: _onChanged,
+                onSubmitted: _onSubmitted,
+              ),
+            ],
           ),
         ),
         Padding(
@@ -69,13 +95,83 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ],
     );
   }
+
   Widget _results() {
     if (_mode == 2) return _topics(_query);
     if (_query.isEmpty) {
-      return _message(_mode == 0 ? 'Search for people by name or username.' : 'Search the text of threads.');
+      return _discoverLanding();
     }
     return _mode == 0 ? _people(_query) : _threads(_query);
   }
+
+  Widget _discoverLanding() {
+    if (_recentSearches.isEmpty) {
+      return _message('Search for people, threads, or topics.');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+      children: [
+        Row(
+          children: [
+            Text(
+              'Recent searches',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: context.colors.secondaryLabel,
+              ),
+            ),
+            const Spacer(),
+            AdaptiveButton.child(
+              style: AdaptiveButtonStyle.plain,
+              color: context.colors.activeBlue,
+              padding: EdgeInsets.zero,
+              minSize: const Size(28, 28),
+              onPressed: () => setState(() => _recentSearches.clear()),
+              child: Text(
+                'Clear',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.activeBlue,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final search in _recentSearches)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              _controller.text = search;
+              _onSubmitted(search);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              child: Row(
+                children: [
+                  Icon(
+                    AppIcons.clock,
+                    size: 17,
+                    color: context.colors.secondaryLabel,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(search, style: const TextStyle(fontSize: 15)),
+                  ),
+                  Icon(
+                    AppIcons.chevron_forward,
+                    size: 16,
+                    color: context.colors.secondaryLabel,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _message(String text) {
     return Center(
       child: Padding(
@@ -88,6 +184,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
     );
   }
+
   /// One list with a spinner, an error message, an empty message and dividers.
   Widget _list<T>(
     AsyncValue<List<T>> value, {
@@ -107,13 +204,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           itemBuilder: (context, index) => Column(
             children: [
               row(items[index]),
-              Container(height: 0.5, margin: EdgeInsets.only(left: indent), color: context.colors.separator),
+              Container(
+                height: 0.5,
+                margin: EdgeInsets.only(left: indent),
+                color: context.colors.separator,
+              ),
             ],
           ),
         );
       },
     );
   }
+
   Widget _people(String query) {
     return _list<Profile>(
       ref.watch(searchPeopleProvider(query)),
@@ -122,12 +224,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       row: (person) => ProfileRow(profile: person),
     );
   }
+
   Widget _threads(String query) {
     final muted = ref.watch(mutedIdsProvider).value ?? const <String>{};
-    final results = ref.watch(searchThreadsProvider(query)).whenData(
+    final results = ref
+        .watch(searchThreadsProvider(query))
+        .whenData(
           (posts) => [
             for (final post in posts)
-              if (!muted.contains(post.author.id) && !_gone.contains(post.id)) post,
+              if (!muted.contains(post.author.id) && !_gone.contains(post.id))
+                post,
           ],
         );
     return _list<ThreadPost>(
@@ -143,10 +249,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
     );
   }
+
   Widget _topics(String query) {
     final list = _list<TopicHit>(
       ref.watch(searchTopicsProvider(query)),
-      empty: query.isEmpty ? 'No topics yet.' : 'No topics start with that text.',
+      empty: query.isEmpty
+          ? 'No topics yet.'
+          : 'No topics start with that text.',
       indent: 16,
       row: (hit) => GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -156,14 +265,24 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           child: Row(
             children: [
               Expanded(
-                child: Text('#${hit.tag}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                child: Text(
+                  '#${hit.tag}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               Text(
                 '${hit.uses} ${hit.uses == 1 ? 'thread' : 'threads'}',
                 style: TextStyle(color: context.colors.secondaryLabel),
               ),
               const SizedBox(width: 6),
-              Icon(AppIcons.chevron_forward, size: 16, color: context.colors.secondaryLabel),
+              Icon(
+                AppIcons.chevron_forward,
+                size: 16,
+                color: context.colors.secondaryLabel,
+              ),
             ],
           ),
         ),
@@ -176,8 +295,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         Padding(
           padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: Text(
-            'Popular topics',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: context.colors.secondaryLabel),
+            'Trending topics',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: context.colors.secondaryLabel,
+            ),
           ),
         ),
         Expanded(child: list),

@@ -49,25 +49,52 @@ class MessageRepository {
   }
 
   /// The newest [limit] messages, oldest first - the order the chat shows them.
-  Future<List<Message>> messages(String conversationId, {int limit = 200}) async {
+  Future<List<Message>> messages(
+    String conversationId, {
+    int limit = 200,
+  }) async {
     final rows = await _client
         .from('messages')
-        .select('id, conversation_id, sender_id, body, created_at')
+        .select(
+          'id, conversation_id, sender_id, body, created_at, edited_at, deleted_at, reply_to_id',
+        )
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: false)
         .limit(limit);
-    final newestFirst = rows.map((row) => Message.fromJson(row)).toList();
+    final ids = rows.map<String>((row) => row['id'] as String).toList();
+    final reactionRows = ids.isEmpty
+        ? <dynamic>[]
+        : await _client
+              .from('message_reactions')
+              .select('message_id, user_id, emoji')
+              .inFilter('message_id', ids);
+    final reactionsByMessage = <String, List<MessageReaction>>{};
+    for (final row in reactionRows) {
+      final messageId = row['message_id'] as String;
+      reactionsByMessage
+          .putIfAbsent(messageId, () => [])
+          .add(MessageReaction.fromJson(row));
+    }
+    final newestFirst = rows.map((row) {
+      final message = Message.fromJson(
+        row,
+        reactions: reactionsByMessage[row['id'] as String] ?? const [],
+      );
+      return message;
+    }).toList();
     return newestFirst.reversed.toList();
   }
 
   Future<void> send({
     required String conversationId,
     required String body,
+    String? replyToId,
   }) async {
     await _client.from('messages').insert({
       'conversation_id': conversationId,
       'sender_id': _me,
       'body': body.trim(),
+      'reply_to_id': replyToId,
     });
   }
 
@@ -80,6 +107,41 @@ class MessageRepository {
         .eq('user_id', _me);
   }
 
+  Future<void> toggleReaction({
+    required String messageId,
+    required String emoji,
+  }) async {
+    final existing = await _client
+        .from('message_reactions')
+        .select('message_id')
+        .eq('message_id', messageId)
+        .eq('user_id', _me)
+        .eq('emoji', emoji)
+        .maybeSingle();
+    if (existing != null) {
+      await _client
+          .from('message_reactions')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', _me)
+          .eq('emoji', emoji);
+    } else {
+      await _client.from('message_reactions').insert({
+        'message_id': messageId,
+        'user_id': _me,
+        'emoji': emoji,
+      });
+    }
+  }
+
+  Future<void> unsend(String messageId) async {
+    await _client
+        .from('messages')
+        .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('id', messageId)
+        .eq('sender_id', _me);
+  }
+
   /// Emits again whenever a message in this conversation arrives. The
   /// conversation id is part of the topic filter, so no other thread's messages
   /// are delivered.
@@ -90,6 +152,12 @@ class MessageRepository {
         .eq('conversation_id', conversationId)
         .order('created_at')
         .limit(200);
+  }
+
+  Stream<List<Map<String, dynamic>>> liveReactions() {
+    return _client
+        .from('message_reactions')
+        .stream(primaryKey: const ['message_id', 'user_id', 'emoji']);
   }
 
   /// Emits again whenever one of my conversations changes - a new message in

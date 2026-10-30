@@ -31,8 +31,50 @@ class ProfileScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
+
+class _ProfileSkeletonBlock extends StatefulWidget {
+  const _ProfileSkeletonBlock({required this.width, required this.height, required this.radius, required this.color});
+  final double width;
+  final double height;
+  final double radius;
+  final Color color;
+
+  @override
+  State<_ProfileSkeletonBlock> createState() => _ProfileSkeletonBlockState();
+}
+
+class _ProfileSkeletonBlockState extends State<_ProfileSkeletonBlock> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final position = -1.5 + (_controller.value * 3);
+          final highlight = Color.lerp(widget.color, CupertinoColors.white, .16)!;
+          return ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment(position, 0),
+              end: Alignment(position + 1, 0),
+              colors: [widget.color, widget.color, highlight, widget.color, widget.color],
+              stops: const [0, .32, .5, .68, 1],
+            ).createShader(bounds),
+            child: Container(
+              width: widget.width,
+              height: widget.height,
+              decoration: BoxDecoration(color: widget.color, borderRadius: BorderRadius.circular(widget.radius)),
+            ),
+          );
+        },
+      );
+}
+
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const _tabNames = ['threads', 'replies', 'reposts'];
+  static const _tabNames = ['threads', 'replies', 'media', 'reposts'];
   int _tab = 0;
   final Map<String, ThreadPost> _edits = {};
   final Set<String> _gone = {};
@@ -142,7 +184,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final profileAsync = ref.watch(profileByIdProvider(widget.userId));
     final me = ref.watch(currentUserIdProvider);
     final body = profileAsync.when<Widget>(
-      loading: () => const Center(child: AppSpinner()),
+      loading: () => _profileSkeleton(),
       error: (error, _) => Center(child: Text(friendlyError(error))),
       data: (profile) {
         if (profile == null) {
@@ -172,7 +214,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: AdaptiveSegmentedControl(
-              labels: const ['Threads', 'Replies', 'Reposts'],
+            labels: const ['Posts', 'Replies', 'Media', 'Reposts'],
               selectedIndex: _tab,
               onValueChanged: _selectTab,
             ),
@@ -196,6 +238,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ],
     );
   }
+
+  Widget _profileSkeleton() => ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+        children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              _skeletonBlock(width: 150, height: 22),
+              const SizedBox(height: 10),
+              _skeletonBlock(width: 100, height: 14),
+            ])),
+            _skeletonBlock(width: 88, height: 88, radius: 44),
+          ]),
+          const SizedBox(height: 18),
+          _skeletonBlock(width: double.infinity, height: 15),
+          const SizedBox(height: 9),
+          _skeletonBlock(width: 220, height: 15),
+          const SizedBox(height: 18),
+          Row(children: [
+            _skeletonBlock(width: 100, height: 15),
+            const SizedBox(width: 18),
+            _skeletonBlock(width: 100, height: 15),
+          ]),
+          const SizedBox(height: 18),
+          _skeletonBlock(width: double.infinity, height: 42, radius: 10),
+          const SizedBox(height: 18),
+          _skeletonBlock(width: double.infinity, height: 42, radius: 10),
+        ],
+      );
+
+  Widget _skeletonBlock({required double width, required double height, double radius = 3}) =>
+      _ProfileSkeletonBlock(width: width, height: height, radius: radius, color: context.colors.systemGrey6);
   Widget _header(Profile profile, {required bool isMine, required FollowState followState}) {
     final website = profile.website;
     return Padding(
@@ -235,16 +308,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       '@${profile.username}',
                       style: TextStyle(fontSize: 15, color: context.colors.secondaryLabel),
                     ),
+                    if (profile.isPrivate) ...[
+                      const SizedBox(height: 7),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(AppIcons.lock_fill, size: 13, color: context.colors.secondaryLabel),
+                          const SizedBox(width: 4),
+                          Text('Private', style: TextStyle(fontSize: 12, color: context.colors.secondaryLabel, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ],
+                    if (profile.bio.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(profile.bio, style: const TextStyle(fontSize: 15)),
+                    ],
                   ],
                 ),
               ),
-              Avatar(name: profile.name, url: profile.avatarUrl, size: 80),
+              Avatar(name: profile.name, url: profile.avatarUrl, size: 88),
             ],
           ),
-          if (profile.bio.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(profile.bio, style: const TextStyle(fontSize: 15)),
-          ],
           if (website != null && website.isNotEmpty) ...[
             const SizedBox(height: 8),
             GestureDetector(
@@ -323,15 +407,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
   }
+  Widget _profilePostSkeleton() => Column(
+        children: [
+          for (var i = 0; i < 4; i++)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                _skeletonBlock(width: 42, height: 42, radius: 21),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    _skeletonBlock(width: 120, height: 14),
+                    const SizedBox(width: 8),
+                    _skeletonBlock(width: 58, height: 12),
+                  ]),
+                  const SizedBox(height: 12),
+                  _skeletonBlock(width: double.infinity, height: 14),
+                  const SizedBox(height: 8),
+                  _skeletonBlock(width: 190, height: 14),
+                ])),
+              ]),
+            ),
+        ],
+      );
+
   List<Widget> _postSlivers(String userId) {
     final firstPage = ref.watch(profileTabProvider((userId, _tabName)));
     final pinned = _tab == 0 ? ref.watch(pinnedThreadProvider(userId)).value : null;
     return firstPage.when<List<Widget>>(
-      loading: () => const [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(child: AppSpinner()),
-        ),
+      loading: () => [
+        SliverToBoxAdapter(child: _profilePostSkeleton()),
       ],
       error: (error, _) => [
         SliverFillRemaining(

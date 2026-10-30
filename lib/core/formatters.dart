@@ -10,6 +10,26 @@ String timeAgo(DateTime time, {DateTime? now}) {
   return '${time.day}/${time.month}/${time.year}';
 }
 
+/// Readable relative time for post and reply metadata, such as "23 mins" or
+/// "1 hr".
+String timeAgoLong(DateTime time, {DateTime? now}) {
+  final difference = (now ?? DateTime.now()).difference(time);
+  if (difference.inSeconds < 60) return 'now';
+  if (difference.inMinutes < 60) {
+    final value = difference.inMinutes;
+    return '$value ${value == 1 ? 'min' : 'mins'}';
+  }
+  if (difference.inHours < 24) {
+    final value = difference.inHours;
+    return '$value ${value == 1 ? 'hr' : 'hrs'}';
+  }
+  if (difference.inDays < 7) {
+    final value = difference.inDays;
+    return '$value ${value == 1 ? 'day' : 'days'}';
+  }
+  return '${time.day}/${time.month}/${time.year}';
+}
+
 /// Compact counts such as 950, 1.2K or 3.4M.
 String compactCount(int value) {
   if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}M';

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:threads/core/adaptive.dart';
@@ -123,12 +124,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
   Widget _label(String text) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 6),
+      padding: const EdgeInsets.only(top: 18, bottom: 7),
       child: Text(
         text,
         style: TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
+          letterSpacing: .2,
           color: context.colors.secondaryLabel,
         ),
       ),
@@ -152,18 +154,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         appBar: AdaptiveAppBar(title: 'Edit profile'),
         body: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 36),
             children: [
               Center(
                 child: GestureDetector(
                   onTap: _busy ? null : _pickPhoto,
                   child: Column(
                     children: [
-                      _photo(),
-                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: context.colors.separator, width: .5),
+                        ),
+                        child: _photo(),
+                      ),
+                      const SizedBox(height: 10),
                       Text(
                         'Change photo',
-                        style: TextStyle(color: context.colors.activeBlue),
+                        style: TextStyle(color: context.colors.activeBlue, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -190,7 +199,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                 placeholder: 'Tell people about yourself',
                 minLines: 3,
                 maxLines: 4,
-                maxLength: maxBioLength,
+                inputFormatters: [LengthLimitingTextInputFormatter(maxBioLength)],
                 onChanged: (_) => setState(() {}),
               ),
               Align(

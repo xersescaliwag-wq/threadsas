@@ -23,9 +23,12 @@ class ActivityScreen extends ConsumerStatefulWidget {
   ConsumerState<ActivityScreen> createState() => _ActivityScreenState();
 }
 class _ActivityScreenState extends ConsumerState<ActivityScreen> {
+  NotificationType? _filter;
+  bool _verifiedOnly = false;
   /// Rows that were unread when the person opened the tab. They keep their
   /// highlight until the person leaves the tab.
   final Set<String> _fresh = {};
+  bool _followRequestsRefreshQueued = false;
   @override
   void didUpdateWidget(ActivityScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -54,6 +57,15 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     ref.invalidate(followRequestsProvider);
     ref.invalidate(activityProvider);
     await ref.read(activityProvider.future);
+  }
+
+  void _scheduleFollowRequestsRefresh() {
+    if (_followRequestsRefreshQueued) return;
+    _followRequestsRefreshQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _followRequestsRefreshQueued = false;
+      if (mounted) ref.invalidate(followRequestsProvider);
+    });
   }
   void _open(AppNotification item) {
     switch (item.type) {
@@ -100,7 +112,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     // A realtime event reloads the list. If the tab is open, the new rows are
     // marked read straight away.
     ref.listen(activityProvider, (previous, next) {
-      ref.invalidate(followRequestsProvider);
+      if (!next.isLoading) _scheduleFollowRequestsRefresh();
       if (next.isLoading || !widget.isVisible) return;
       final items = next.value;
       if (items != null) setState(() => _markRead(items));
@@ -115,8 +127,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       data: (items) => AppRefreshView(
         onRefresh: _refresh,
         slivers: [
+          SliverToBoxAdapter(child: _filterBar(items)),
           if (requests.isNotEmpty) SliverToBoxAdapter(child: _requestsRow(requests.length)),
-          if (items.isEmpty)
+          if (_visible(items).isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
@@ -128,14 +141,59 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) => Column(
                   children: [
-                    _row(items[index]),
+                    _row(_visible(items)[index]),
                     Container(height: 0.5, margin: const EdgeInsets.only(left: 74), color: context.colors.separator),
                   ],
                 ),
-                childCount: items.length,
+                childCount: _visible(items).length,
               ),
             ),
         ],
+      ),
+    );
+  }
+  List<AppNotification> _visible(List<AppNotification> items) => items.where((item) {
+        if (_verifiedOnly && !item.actor.isVerified) return false;
+        return _filter == null || item.type == _filter;
+      }).toList();
+
+  Widget _filterBar(List<AppNotification> items) {
+    final hasVerified = items.any((item) => item.actor.isVerified);
+    final filters = <(NotificationType?, String)>[
+      (null, 'All'),
+      (NotificationType.mention, 'Mentions'),
+    ];
+    if (hasVerified) filters.add((null, 'Verified'));
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        scrollDirection: Axis.horizontal,
+        itemCount: filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final (value, label) = filters[index];
+          final isVerifiedFilter = label == 'Verified';
+          final selected = isVerifiedFilter ? _verifiedOnly : (!_verifiedOnly && _filter == value);
+          return GestureDetector(
+            onTap: () => setState(() {
+              _verifiedOnly = isVerifiedFilter;
+              _filter = isVerifiedFilter || label == 'All' ? null : value;
+            }),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+              color: selected ? context.colors.label : context.colors.systemGrey6,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(label, style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: selected ? context.colors.systemBackground : context.colors.label,
+              )),
+            ),
+          );
+        },
       ),
     );
   }

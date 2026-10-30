@@ -72,6 +72,7 @@ create table if not exists public.likes (
   primary key (thread_id, user_id)
 );
 
+
 create table if not exists public.reposts (
   thread_id  uuid not null references public.threads (id) on delete cascade,
   user_id    uuid not null references public.profiles (id) on delete cascade,

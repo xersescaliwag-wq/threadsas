@@ -9,7 +9,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:threads/core/adaptive.dart';
 import 'package:threads/models/music_track.dart';
 
-/// A compact Threads-style 30-second music clip with a soundwave UI.
+/// A compact Threads-style 60-second music clip with a soundwave UI.
 class MusicSticker extends StatefulWidget {
   const MusicSticker({super.key, required this.track});
 
@@ -31,9 +31,10 @@ class _MusicStickerState extends State<MusicSticker>
   bool _playing = false;
   bool _loading = false;
   bool _failed = false;
+  DateTime _lastToggle = DateTime.fromMillisecondsSinceEpoch(0);
 
   Duration get _clipStart => Duration(seconds: widget.track.clipStartSeconds);
-  Duration get _clipEnd => _clipStart + const Duration(seconds: 30);
+  Duration get _clipEnd => _clipStart + const Duration(seconds: 60);
 
   @override
   void initState() {
@@ -48,7 +49,10 @@ class _MusicStickerState extends State<MusicSticker>
       if (!mounted) return;
       final isPlaying = state.playing;
 
-      if (isPlaying != _playing) {
+      // Keep the optimistic icon stable while the stream is being prepared.
+      // The intermediate `playing: false` event otherwise makes the triangle
+      // flash back before the audio starts.
+      if (!_loading && isPlaying != _playing) {
         setState(() => _playing = isPlaying);
       }
 
@@ -65,7 +69,8 @@ class _MusicStickerState extends State<MusicSticker>
 
     _processingStateSub = _player.processingStateStream.listen((state) {
       if (!mounted) return;
-      if (state == ProcessingState.ready || state == ProcessingState.buffering) {
+      if (state == ProcessingState.ready ||
+          state == ProcessingState.buffering) {
         if (_loading) {
           setState(() => _loading = false);
         }
@@ -104,22 +109,26 @@ class _MusicStickerState extends State<MusicSticker>
   }
 
   Future<void> _toggle() async {
+    final now = DateTime.now();
+    if (now.difference(_lastToggle) < const Duration(milliseconds: 220)) return;
+    _lastToggle = now;
     if (_loading) return;
 
     if (_playing) {
       _clipTimer?.cancel();
+      if (mounted) setState(() => _playing = false);
       await _player.pause();
       try {
         if (_waveController.isAnimating) {
           _waveController.stop();
         }
       } catch (_) {}
-      if (mounted) setState(() => _playing = false);
       return;
     }
 
     setState(() {
       _loading = true;
+      _playing = true;
       _failed = false;
     });
 
@@ -135,7 +144,7 @@ class _MusicStickerState extends State<MusicSticker>
       await _player.play();
 
       _clipTimer?.cancel();
-      _clipTimer = Timer(const Duration(seconds: 30), () {
+      _clipTimer = Timer(const Duration(seconds: 60), () {
         if (mounted) {
           _finishClip();
         }
@@ -188,26 +197,26 @@ class _MusicStickerState extends State<MusicSticker>
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         border: Border.all(color: colors.separator),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _toggle,
-            child: SizedBox(
-              width: 32,
-              height: 32,
-              child: Center(
-                child: _loading && !_playing
-                    ? const AppSpinner(radius: 7)
-                    : Icon(
-                        _playing
-                            ? CupertinoIcons.pause_fill
-                            : CupertinoIcons.play_fill,
-                        size: 16,
-                        color: colors.label,
-                      ),
+          Semantics(
+            button: true,
+            label: _playing ? 'Pause music preview' : 'Play music preview',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _toggle,
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Icon(
+                    _playing ? AppIcons.pause_fill : AppIcons.play_fill,
+                    size: 18,
+                    color: colors.label,
+                  ),
+                ),
               ),
             ),
           ),
@@ -310,8 +319,9 @@ class _SoundWave extends StatelessWidget {
               animation: controller,
               builder: (context, child) {
                 final t = isPlaying
-                    ? (math.sin((controller.value + i * 0.16) * math.pi) * 0.36 +
-                        0.64)
+                    ? (math.sin((controller.value + i * 0.16) * math.pi) *
+                              0.36 +
+                          0.64)
                     : 0.38;
                 final height = 14 * bars[i] * t;
                 return Container(

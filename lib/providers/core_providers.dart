@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:threads/data/auth_repository.dart';
 import 'package:threads/data/community_repository.dart';
+import 'package:threads/data/draft_repository.dart';
+import 'package:threads/data/scheduled_post_repository.dart';
+import 'package:threads/data/personalization_repository.dart';
 import 'package:threads/data/gif_repository.dart';
 import 'package:threads/data/instagram_repository.dart';
 import 'package:threads/data/link_preview_repository.dart';
@@ -54,6 +57,15 @@ final musicRepositoryProvider = Provider<MusicRepository>((ref) {
 });
 final communityRepositoryProvider = Provider<CommunityRepository>(
   (ref) => CommunityRepository(ref.watch(supabaseClientProvider)),
+);
+final draftRepositoryProvider = Provider<DraftRepository>(
+  (ref) => DraftRepository(ref.watch(supabaseClientProvider)),
+);
+final scheduledPostRepositoryProvider = Provider<ScheduledPostRepository>(
+  (ref) => ScheduledPostRepository(ref.watch(supabaseClientProvider)),
+);
+final personalizationRepositoryProvider = Provider<PersonalizationRepository>(
+  (ref) => PersonalizationRepository(ref.watch(supabaseClientProvider)),
 );
 final instagramRepositoryProvider = Provider<InstagramRepository>(
   (ref) => InstagramRepository(ref.watch(supabaseClientProvider)),

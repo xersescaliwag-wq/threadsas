@@ -35,6 +35,9 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusManager.instance.primaryFocus?.unfocus();
+    });
     _search('');
   }
 
@@ -84,6 +87,7 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
       return;
     }
 
+    if (mounted) setState(() => _playingId = track.id);
     try {
       _clipTimer?.cancel();
       final session = await AudioSession.instance;
@@ -96,16 +100,18 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
       await _player.seek(Duration(seconds: track.clipStartSeconds));
       await _player.play();
 
-      _clipTimer = Timer(const Duration(seconds: 30), () async {
+      _clipTimer = Timer(const Duration(seconds: 60), () async {
         await _player.pause();
         if (mounted) setState(() => _playingId = null);
       });
-      if (mounted) setState(() => _playingId = track.id);
     } catch (e, s) {
       debugPrint('MusicSearch preview failed: $e');
       debugPrint('$s');
       if (mounted) {
-        setState(() => _error = 'This track could not be previewed.');
+        setState(() {
+          _playingId = null;
+          _error = 'This track could not be previewed.';
+        });
       }
     }
   }
@@ -115,7 +121,9 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
     await _player.pause();
     if (!mounted) return;
     setState(() => _playingId = null);
-    Navigator.of(context).pop(track.copyWith(clipStartSeconds: track.clipStartSeconds));
+    Navigator.of(
+      context,
+    ).pop(track.copyWith(clipStartSeconds: track.clipStartSeconds));
   }
 
   @override
@@ -132,7 +140,7 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
                 placeholder: 'Search songs or artists',
                 onChanged: _onChanged,
                 onSubmitted: _search,
-                autofocus: true,
+                autofocus: false,
               ),
             ),
             Expanded(child: _body()),
@@ -154,17 +162,30 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
 
   Widget _body() {
     if (_loading && _results.isEmpty) {
-      return const Center(child: AppSpinner());
+      return ListView.builder(
+        itemCount: 9,
+        itemBuilder: (context, index) => const _MusicLoadingRow(),
+      );
     }
     final error = _error;
     if (error != null && _results.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
-            error,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: context.colors.secondaryLabel),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: context.colors.secondaryLabel),
+              ),
+              const SizedBox(height: 14),
+              AdaptiveButton.child(
+                onPressed: () => _search(_lastQuery),
+                child: const Text('Try again'),
+              ),
+            ],
           ),
         ),
       );
@@ -268,6 +289,67 @@ class _MusicSearchScreenState extends ConsumerState<MusicSearchScreen> {
   }
 }
 
+class _MusicLoadingRow extends StatefulWidget {
+  const _MusicLoadingRow();
+  @override
+  State<_MusicLoadingRow> createState() => _MusicLoadingRowState();
+}
+
+class _MusicLoadingRowState extends State<_MusicLoadingRow>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final block = context.colors.systemGrey5;
+    final highlight = Color.lerp(block, CupertinoColors.white, .16)!;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final position = -1.5 + (_controller.value * 3);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) => LinearGradient(
+            begin: Alignment(position, 0),
+            end: Alignment(position + 1, 0),
+            colors: [block, block, highlight, block, block],
+            stops: const [0, .32, .5, .68, 1],
+          ).createShader(bounds),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Container(width: 56, height: 56, color: block),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(width: 150, height: 14, color: block),
+                      const SizedBox(height: 8),
+                      Container(width: 90, height: 12, color: block),
+                    ],
+                  ),
+                ),
+                Container(width: 28, height: 28, color: block),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class MusicClipEditorScreen extends StatefulWidget {
   const MusicClipEditorScreen({super.key, required this.track});
 
@@ -285,7 +367,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
   bool _playing = false;
   bool _loading = false;
 
-  int get _latestStart => (widget.track.durationSeconds - 30).clamp(0, 86400);
+  int get _latestStart => (widget.track.durationSeconds - 60).clamp(0, 86400);
   int get _trackDuration => widget.track.durationSeconds;
 
   @override
@@ -322,7 +404,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
       await _player.play();
 
       _clipTimer?.cancel();
-      _clipTimer = Timer(const Duration(seconds: 30), () async {
+      _clipTimer = Timer(const Duration(seconds: 60), () async {
         await _player.pause();
         if (mounted) setState(() => _playing = false);
       });
@@ -399,10 +481,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colors.secondaryLabel,
-                ),
+                style: TextStyle(fontSize: 12, color: colors.secondaryLabel),
               ),
               const SizedBox(height: 24),
               Row(
@@ -425,7 +504,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _time((_start.round() + 30).clamp(30, _trackDuration)),
+                    _time((_start.round() + 60).clamp(60, _trackDuration)),
                     style: TextStyle(
                       fontSize: 11,
                       color: colors.secondaryLabel,
@@ -437,7 +516,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
               if (maxStart > 0) ...[
                 _WaveformScrubber(
                   durationSeconds: _trackDuration,
-                  clipLength: 30,
+                  clipLength: 60,
                   maxStart: maxStart,
                   start: _start.clamp(0, maxStart),
                   onChanged: _moveStart,
@@ -453,7 +532,7 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    'Full track • 30 sec clip',
+                    'Full track • 60 sec clip',
                     style: TextStyle(
                       fontSize: 11,
                       color: colors.secondaryLabel,
@@ -478,14 +557,12 @@ class _MusicClipEditorScreenState extends State<MusicClipEditorScreen>
                         const AppSpinner(radius: 7)
                       else
                         Icon(
-                          _playing ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
+                          _playing ? AppIcons.pause_fill : AppIcons.play_fill,
                           size: 14,
                         ),
                       const SizedBox(width: 6),
                       Text(
-                        _loading
-                            ? 'Loading'
-                            : (_playing ? 'Pause' : 'Preview'),
+                        _loading ? 'Loading' : (_playing ? 'Pause' : 'Preview'),
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
@@ -541,7 +618,8 @@ class _WaveformScrubber extends StatelessWidget {
         final width = constraints.maxWidth;
         final barWidth = (width - (barCount - 1) * 2) / barCount;
         final startRatio = maxStart <= 0 ? 0.0 : (start / maxStart);
-        final clipWidth = (clipLength / durationSeconds.clamp(clipLength, 600)) * width;
+        final clipWidth =
+            (clipLength / durationSeconds.clamp(clipLength, 600)) * width;
 
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -573,7 +651,8 @@ class _WaveformScrubber extends StatelessWidget {
                     for (var i = 0; i < barCount; i++)
                       Container(
                         width: barWidth,
-                        height: 10 +
+                        height:
+                            10 +
                             (random.nextDouble() * 18) +
                             math.sin(i / 4) * 6,
                         decoration: BoxDecoration(

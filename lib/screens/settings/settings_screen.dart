@@ -10,6 +10,7 @@ import 'package:threads/providers/core_providers.dart';
 import 'package:threads/screens/profile/follow_requests_screen.dart';
 import 'package:threads/screens/settings/account_list_screen.dart';
 import 'package:threads/screens/settings/instagram_screen.dart';
+import 'package:threads/screens/settings/change_password_screen.dart';
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
   @override
@@ -126,6 +127,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     header: const Text('Account'),
                     footer: email == null ? null : Text('Signed in as $email'),
                     children: [
+                      _tile(
+                        AppIcons.lock_fill,
+                        'Change password',
+                        () => openScreen<void>(context, const ChangePasswordScreen()),
+                      ),
                       AdaptiveListTile(title: const Text('Log out'), onTap: _logOut),
                       AdaptiveListTile(
                         title: Text('Delete account', style: TextStyle(color: context.colors.systemRed)),

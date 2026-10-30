@@ -90,10 +90,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         SliverToBoxAdapter(child: _homeHeader()),
         ...feed.when<List<Widget>>(
           loading: () => [
-            const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: AppSpinner()),
-            ),
+            SliverToBoxAdapter(child: _FeedSkeletonList()),
           ],
           error: (error, _) => [
             SliverFillRemaining(
@@ -157,6 +154,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: _feedSwitcher(),
+          ),
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: () => openScreen<void>(
@@ -203,6 +204,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Container(height: .5, color: context.colors.separator),
         ],
       ),
+    );
+  }
+
+  Widget _feedSwitcher() {
+    final selected = ref.watch(selectedFeedProvider);
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: context.colors.systemGrey6,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(children: [
+        for (final entry in const [(0, 'For You'), (1, 'Following')])
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => ref.read(selectedFeedProvider.notifier).select(entry.$1),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: selected == entry.$1 ? context.colors.systemBackground : null,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: selected == entry.$1 ? [BoxShadow(color: context.colors.separator, blurRadius: 5, offset: const Offset(0, 1))] : null,
+                ),
+                child: Text(entry.$2, style: TextStyle(fontSize: 14, fontWeight: selected == entry.$1 ? FontWeight.w700 : FontWeight.w500)),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 
@@ -293,4 +326,98 @@ class _RetryView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _FeedSkeletonList extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [for (var i = 0; i < 5; i++) const _SkeletonPost()],
+  );
+}
+
+class _SkeletonPost extends StatelessWidget {
+  const _SkeletonPost();
+  @override
+  Widget build(BuildContext context) {
+    final color = context.colors.systemGrey6;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _SkeletonBlock(width: 52, height: 52, radius: 26, color: color),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            _SkeletonBlock(width: 136, height: 16, color: color),
+            const SizedBox(width: 10),
+            _SkeletonBlock(width: 78, height: 14, color: color),
+          ]),
+          const SizedBox(height: 14),
+          _SkeletonBlock(width: double.infinity, height: 16, color: color),
+          const SizedBox(height: 10),
+          FractionallySizedBox(widthFactor: .72, child: _SkeletonBlock(width: double.infinity, height: 16, color: color)),
+        ])),
+      ]),
+    );
+  }
+}
+
+class _SkeletonBlock extends StatefulWidget {
+  const _SkeletonBlock({required this.width, required this.height, required this.color, this.radius = 2});
+  final double width;
+  final double height;
+  final double radius;
+  final Color color;
+
+  @override
+  State<_SkeletonBlock> createState() => _SkeletonBlockState();
+}
+
+class _SkeletonBlockState extends State<_SkeletonBlock>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, child) {
+      final position = -1.5 + (_controller.value * 3);
+      final highlight = Color.lerp(
+        widget.color,
+        CupertinoColors.white,
+        0.16,
+      )!;
+      return ShaderMask(
+        blendMode: BlendMode.srcATop,
+        shaderCallback: (bounds) => LinearGradient(
+          begin: Alignment(position, 0),
+          end: Alignment(position + 1, 0),
+          colors: [
+            widget.color,
+            widget.color,
+            highlight,
+            widget.color,
+            widget.color,
+          ],
+          stops: const [0, .32, .5, .68, 1],
+        ).createShader(bounds),
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: widget.color,
+            borderRadius: BorderRadius.circular(widget.radius),
+          ),
+        ),
+      );
+    },
+  );
 }

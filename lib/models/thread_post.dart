@@ -30,6 +30,7 @@ class ThreadPost {
     required this.id,
     required this.author,
     required this.content,
+    required this.textFormatting,
     required this.mediaUrls,
     required this.mediaKinds,
     required this.music,
@@ -57,6 +58,7 @@ class ThreadPost {
   final String id;
   final Profile author;
   final String content;
+  final Map<String, dynamic> textFormatting;
   final List<String> mediaUrls;
 
   /// Runs alongside [mediaUrls]: each entry is 'image', 'video' or 'gif'
@@ -116,6 +118,7 @@ class ThreadPost {
       id: json['id'] as String,
       author: Profile.fromJson(json['author'] as Map<String, dynamic>),
       content: (json['content'] as String?) ?? '',
+      textFormatting: (json['text_formatting'] as Map?)?.cast<String, dynamic>() ?? const {},
       mediaUrls: asStringList(json['media_urls']),
       mediaKinds: asStringList(json['media_kinds']),
       music: MusicTrack.fromThreadJson(json),
@@ -167,6 +170,7 @@ class ThreadPost {
   /// before the server confirms.
   ThreadPost copyWith({
     String? content,
+    Map<String, dynamic>? textFormatting,
     ReplyControl? replyControl,
     bool? hideLikeCount,
     bool? isPinned,
@@ -181,6 +185,7 @@ class ThreadPost {
       id: id,
       author: author,
       content: content ?? this.content,
+      textFormatting: textFormatting ?? this.textFormatting,
       mediaUrls: mediaUrls,
       mediaKinds: mediaKinds,
       music: music,

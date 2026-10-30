@@ -11,11 +11,13 @@ class RichContent extends StatelessWidget {
     this.onHashtag,
     this.onMention,
     this.style,
+    this.formatting = const {},
   });
   final String text;
   final ValueChanged<String>? onHashtag;
   final ValueChanged<String>? onMention;
   final TextStyle? style;
+  final Map<String, dynamic> formatting;
 
   static final RegExp _token = RegExp(
     r'(#[A-Za-z0-9_]+)|(@[A-Za-z0-9_.]+)|(https?://[^\s]+)',
@@ -23,14 +25,21 @@ class RichContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseStyle = style ??
-        TextStyle(fontSize: 16, height: 1.35, color: context.colors.label);
+    final baseStyle = (style ?? TextStyle(fontSize: 16, height: 1.35, color: context.colors.label)).copyWith(
+      fontWeight: formatting['bold'] == true ? FontWeight.w900 : null,
+      fontStyle: formatting['italic'] == true ? FontStyle.italic : null,
+      decoration: TextDecoration.combine([
+        if (formatting['underline'] == true) TextDecoration.underline,
+        if (formatting['strikethrough'] == true) TextDecoration.lineThrough,
+      ]),
+    );
+    final displayText = text;
     final linkStyle = baseStyle.copyWith(color: context.colors.activeBlue);
     final spans = <InlineSpan>[];
     var cursor = 0;
-    for (final match in _token.allMatches(text)) {
+    for (final match in _token.allMatches(displayText)) {
       if (match.start > cursor) {
-        spans.add(TextSpan(text: text.substring(cursor, match.start)));
+        spans.add(TextSpan(text: displayText.substring(cursor, match.start)));
       }
       final token = match.group(0)!;
       spans.add(
@@ -45,8 +54,8 @@ class RichContent extends StatelessWidget {
       );
       cursor = match.end;
     }
-    if (cursor < text.length) {
-      spans.add(TextSpan(text: text.substring(cursor)));
+    if (cursor < displayText.length) {
+      spans.add(TextSpan(text: displayText.substring(cursor)));
     }
     return Text.rich(TextSpan(style: baseStyle, children: spans));
   }

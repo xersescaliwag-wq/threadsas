@@ -11,12 +11,15 @@ import 'package:threads/data/thread_repository.dart';
 import 'package:threads/models/thread_post.dart';
 import 'package:threads/providers/core_providers.dart';
 import 'package:threads/screens/compose/compose_screen.dart';
+import 'package:threads/screens/thread/thread_detail_screen.dart';
 
 /// The buttons under a post. Each tap updates the card at once, then saves.
 class ThreadActionRow extends ConsumerStatefulWidget {
-  const ThreadActionRow({super.key, required this.post, required this.onChanged});
+  const ThreadActionRow({super.key, required this.post, required this.onChanged, this.compact = false, this.disableComment = false});
   final ThreadPost post;
   final ValueChanged<ThreadPost> onChanged;
+  final bool compact;
+  final bool disableComment;
 
   @override
   ConsumerState<ThreadActionRow> createState() => _ThreadActionRowState();
@@ -97,16 +100,10 @@ class _ThreadActionRowState extends ConsumerState<ThreadActionRow> {
     }
   }
 
-  /// A reply is saved by the composer. The count here rises at once, without a reload.
+  /// Opens the public thread view. Replies are displayed there and can be
+  /// posted from its public reply composer.
   Future<void> _reply() async {
-    final reply = await openScreen<ThreadPost>(
-      context,
-      ComposeScreen(replyTo: widget.post),
-      fullscreen: true,
-    );
-    if (reply != null && mounted) {
-      widget.onChanged(widget.post.copyWith(replyCount: widget.post.replyCount + 1));
-    }
+    await openScreen<void>(context, ThreadDetailScreen(threadId: widget.post.id));
   }
 
   @override
@@ -117,23 +114,27 @@ class _ThreadActionRowState extends ConsumerState<ThreadActionRow> {
     return Row(
       children: [
         _ActionButton(
+          compact: widget.compact,
           icon: post.likedByMe ? AppIcons.heart_fill : AppIcons.heart,
           tint: post.likedByMe ? context.colors.systemRed : null,
           count: hideCount ? null : post.likeCount,
           onTap: _toggleLike,
         ),
         _ActionButton(
+          compact: widget.compact,
           icon: AppIcons.chat_bubble,
           count: post.replyCount,
-          onTap: _reply,
+          onTap: widget.disableComment ? () {} : _reply,
         ),
         _ActionButton(
+          compact: widget.compact,
           icon: AppIcons.arrow_2_squarepath,
           tint: post.repostedByMe ? context.colors.activeGreen : null,
           count: post.repostCount + post.quoteCount,
           onTap: _showRepostChoices,
         ),
         _ActionButton(
+          compact: widget.compact,
           icon: AppIcons.paperplane,
           onTap: () => copyThreadLink(context, post),
         ),
@@ -145,30 +146,50 @@ class _ThreadActionRowState extends ConsumerState<ThreadActionRow> {
 int _bump(int value, int delta) => value + delta < 0 ? 0 : value + delta;
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.onTap, this.count, this.tint});
+  const _ActionButton({required this.icon, required this.onTap, this.count, this.tint, this.compact = false});
   final IconData icon;
   final VoidCallback onTap;
   final int? count;
   final Color? tint;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final color = tint ?? context.colors.label;
     final shown = count;
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Row(
-          children: [
-            Icon(icon, size: 21, color: color),
-            if (shown != null && shown > 0) ...[
-              const SizedBox(width: 5),
-              Text(compactCount(shown), style: TextStyle(fontSize: 14, color: color)),
-            ],
-          ],
+    final button = Semantics(
+        button: true,
+        label: _accessibilityLabel(icon, shown),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              vertical: 8,
+              horizontal: compact ? 1 : 0,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: compact ? 19 : 21, color: color),
+                if (shown != null && shown > 0) ...[
+                  const SizedBox(width: 3),
+                  Text(compactCount(shown), style: TextStyle(fontSize: compact ? 12 : 14, color: color)),
+                ],
+              ],
+            ),
+          ),
         ),
-      ),
-    );
+      );
+    return compact ? SizedBox(width: 58, child: button) : Expanded(child: button);
   }
+}
+
+String _accessibilityLabel(IconData icon, int? count) {
+  final suffix = count == null || count == 0 ? '' : ', ${compactCount(count)}';
+  if (icon == AppIcons.heart || icon == AppIcons.heart_fill) return 'Like$suffix';
+  if (icon == AppIcons.chat_bubble) return 'Reply$suffix';
+  if (icon == AppIcons.arrow_2_squarepath) return 'Repost or quote$suffix';
+  if (icon == AppIcons.paperplane) return 'Share';
+  return 'Post action';
 }

@@ -30,11 +30,15 @@ class ThreadCard extends ConsumerStatefulWidget {
     required this.onChanged,
     this.onDeleted,
     this.opensOnTap = true,
+    this.compact = false,
+    this.disableComment = false,
   });
   final ThreadPost post;
   final ValueChanged<ThreadPost> onChanged;
   final VoidCallback? onDeleted;
   final bool opensOnTap;
+  final bool compact;
+  final bool disableComment;
 
   @override
   ConsumerState<ThreadCard> createState() => _ThreadCardState();
@@ -169,16 +173,19 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
       behavior: HitTestBehavior.opaque,
       onTap: _openThread,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        padding: EdgeInsets.fromLTRB(widget.compact ? 50 : 16, widget.compact ? 0 : 12, 16, 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             GestureDetector(
               onTap: _openProfile,
-              child: Avatar(
-                name: post.author.name,
-                url: post.author.avatarUrl,
-                size: 40,
+              child: Transform.translate(
+                offset: widget.compact ? const Offset(0, 7) : Offset.zero,
+                child: Avatar(
+                  name: post.author.name,
+                  url: post.author.avatarUrl,
+                  size: widget.compact ? 34 : 40,
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -220,16 +227,18 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          '@${post.author.username} · ${timeAgo(post.createdAt)}$edited',
+                          '@${post.author.username} · ${timeAgoLong(post.createdAt)}$edited',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 12,
                             color: context.colors.secondaryLabel,
                           ),
                         ),
                       ),
-                      const Spacer(),
+                      widget.compact
+                          ? const Spacer()
+                          : const SizedBox(width: 150),
                       AdaptiveButton.child(
                         padding: EdgeInsets.zero,
                         minSize: const Size(28, 28),
@@ -255,6 +264,7 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                     const SizedBox(height: 4),
                     RichContent(
                       text: post.content,
+                      formatting: post.textFormatting,
                       onHashtag: _openTopic,
                       onMention: _openMention,
                     ),
@@ -283,7 +293,12 @@ class _ThreadCardState extends ConsumerState<ThreadCard> {
                     PollView(poll: post.poll!, onVote: _vote),
                   ],
                   const SizedBox(height: 6),
-                  ThreadActionRow(post: post, onChanged: _update),
+                  ThreadActionRow(
+                    post: post,
+                    onChanged: _update,
+                    compact: widget.compact,
+                    disableComment: widget.disableComment,
+                  ),
                 ],
               ),
             ),

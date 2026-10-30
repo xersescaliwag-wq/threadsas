@@ -1,7 +1,7 @@
 // lib/core/config.dart
-const String supabaseUrl = 'https://dfccorjkvgvigzrpbiny.supabase.co';
+const String supabaseUrl = 'https://jjhrworgrvlwhoyjeboa.supabase.co';
 const String supabasePublishableKey =
-    'sb_publishable_B-GnoN9_X77tC-vsbihLHw_CwJnqLxl';
+    'sb_publishable_bW9p9gZ9o9CbBOP1WklZyA_LGH6JPhY';
 
 // Public client key used by the GIPHY integration on Android and iOS.
 const String giphyApiKey = 'iMSR0wtBVEa7wgRvKWgyjirtVTZCD795';

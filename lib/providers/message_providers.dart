@@ -42,6 +42,11 @@ final liveMessagesProvider =
       return ref.watch(messageRepositoryProvider).liveMessages(conversationId);
     });
 
+final liveMessageReactionsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  ref.watch(currentUserIdProvider);
+  return ref.watch(messageRepositoryProvider).liveReactions();
+});
+
 /// Live changes to the inbox. Rows are narrowed to conversations I am in, so a
 /// stray event can never add somebody else's thread to the list.
 final liveInboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {

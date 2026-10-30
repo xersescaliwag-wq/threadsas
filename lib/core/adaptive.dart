@@ -278,9 +278,83 @@ material.InputDecoration borderlessInputDecoration({
   EdgeInsetsGeometry? contentPadding,
 }) => material.InputDecoration(
   hintText: hintText,
-  border: material.InputBorder.none,
+  filled: false,
+  fillColor: material.Colors.transparent,
+  border: const material.OutlineInputBorder(
+    borderRadius: material.BorderRadius.zero,
+    borderSide: material.BorderSide.none,
+  ),
   contentPadding: contentPadding ?? EdgeInsets.zero,
 );
+
+/// Builds the Material half of an [AdaptiveTextField] decoration while keeping
+/// the visual contract in one platform-adaptive place. iOS callers should pass
+/// the matching [AdaptiveTextField.cupertinoDecoration].
+material.InputDecoration appFilledInputDecoration({
+  String? hintText,
+  required Color fillColor,
+  required Color borderColor,
+  Color? focusedBorderColor,
+  double radius = 10,
+  EdgeInsetsGeometry? contentPadding,
+}) {
+  material.OutlineInputBorder border(Color color, double width) =>
+      material.OutlineInputBorder(
+        borderRadius: BorderRadius.circular(radius),
+        borderSide: material.BorderSide(color: color, width: width),
+      );
+
+  return material.InputDecoration(
+    hintText: hintText,
+    filled: true,
+    fillColor: fillColor,
+    border: border(borderColor, .5),
+    enabledBorder: border(borderColor, .5),
+    focusedBorder: border(focusedBorderColor ?? borderColor, 1),
+    contentPadding: contentPadding,
+  );
+}
+
+/// A compact adaptive icon button. It keeps icon-only controls platform
+/// appropriate without forcing individual features to choose a Material or
+/// Cupertino button themselves.
+class AppIconButton extends StatelessWidget {
+  const AppIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.color,
+    this.size = 22,
+    this.padding = EdgeInsets.zero,
+    this.minSize = const Size(44, 44),
+    this.borderRadius,
+    this.semanticLabel,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color? color;
+  final double size;
+  final EdgeInsetsGeometry padding;
+  final Size minSize;
+  final BorderRadius? borderRadius;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: semanticLabel,
+    child: AdaptiveButton.child(
+      onPressed: onPressed,
+      style: AdaptiveButtonStyle.plain,
+      color: color ?? context.colors.label,
+      padding: padding,
+      minSize: minSize,
+      borderRadius: borderRadius,
+      child: Icon(icon, size: size, color: color ?? context.colors.label),
+    ),
+  );
+}
 
 /// A search box: a native Cupertino search field on iOS, and a Material
 /// search-styled text field on Android.
@@ -474,6 +548,67 @@ Future<T?> showAppActionSheet<T>(
   );
 }
 
+/// Presents custom sheet content through the platform's modal-sheet route.
+/// This fills the gap for bespoke layouts (such as the message reaction bar)
+/// while standard confirmations continue to use [AdaptiveAlertDialog].
+Future<T?> showAppModalSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+  bool useRootNavigator = true,
+  bool isScrollControlled = true,
+  Color? barrierColor,
+}) {
+  if (PlatformInfo.isIOS) {
+    return showCupertinoModalPopup<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      barrierDismissible: barrierDismissible,
+      barrierColor:
+          barrierColor ?? CupertinoColors.black.withValues(alpha: .32),
+      builder: builder,
+    );
+  }
+
+  return material.showModalBottomSheet<T>(
+    context: context,
+    useRootNavigator: useRootNavigator,
+    isDismissible: barrierDismissible,
+    isScrollControlled: isScrollControlled,
+    barrierColor: barrierColor,
+    backgroundColor: material.Colors.transparent,
+    builder: builder,
+  );
+}
+
+/// Presents custom dialog content with a platform-appropriate modal route.
+/// Prefer [AdaptiveAlertDialog] for standard alert/confirmation dialogs.
+Future<T?> showAppOverlayDialog<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+  bool useRootNavigator = true,
+  Color? barrierColor,
+}) {
+  if (PlatformInfo.isIOS) {
+    return showCupertinoDialog<T>(
+      context: context,
+      useRootNavigator: useRootNavigator,
+      barrierDismissible: barrierDismissible,
+      barrierColor: barrierColor,
+      builder: builder,
+    );
+  }
+
+  return material.showDialog<T>(
+    context: context,
+    useRootNavigator: useRootNavigator,
+    barrierDismissible: barrierDismissible,
+    barrierColor: barrierColor,
+    builder: builder,
+  );
+}
+
 /// Context-aware adaptive colors. On iOS, returns the appropriate CupertinoColors value
 /// (which auto-resolves with ambient brightness); on Android, returns Material theme colors.
 @immutable
@@ -553,6 +688,9 @@ extension AppColorsX on BuildContext {
 
 /// Platform-adaptive icons.
 abstract final class AppIcons {
+  static IconData get back => PlatformInfo.isIOS
+      ? CupertinoIcons.chevron_back
+      : material.Icons.arrow_back;
   static IconData get add =>
       PlatformInfo.isIOS ? CupertinoIcons.add : material.Icons.add;
   static IconData get add_circled => PlatformInfo.isIOS
@@ -596,6 +734,9 @@ abstract final class AppIcons {
   static IconData get eye => PlatformInfo.isIOS
       ? CupertinoIcons.eye
       : material.Icons.visibility_outlined;
+  static IconData get eye_slash => PlatformInfo.isIOS
+      ? CupertinoIcons.eye_slash
+      : material.Icons.visibility_off_outlined;
   static IconData get hand_raised => PlatformInfo.isIOS
       ? CupertinoIcons.hand_raised
       : material.Icons.pan_tool_outlined;
@@ -614,6 +755,9 @@ abstract final class AppIcons {
       : material.Icons.menu;
   static IconData get lock_fill =>
       PlatformInfo.isIOS ? CupertinoIcons.lock_fill : material.Icons.lock;
+  static IconData get lock_shield => PlatformInfo.isIOS
+      ? CupertinoIcons.lock_shield
+      : material.Icons.shield_outlined;
   static IconData get music_note => PlatformInfo.isIOS
       ? CupertinoIcons.music_note_2
       : material.Icons.music_note;
@@ -649,6 +793,15 @@ abstract final class AppIcons {
   static IconData get quote_bubble_fill => PlatformInfo.isIOS
       ? CupertinoIcons.quote_bubble_fill
       : material.Icons.format_quote;
+  static IconData get reply => PlatformInfo.isIOS
+      ? CupertinoIcons.arrowshape_turn_up_left
+      : material.Icons.reply;
+  static IconData get undo => PlatformInfo.isIOS
+      ? CupertinoIcons.arrow_uturn_left_circle
+      : material.Icons.undo;
+  static IconData get error_bubble => PlatformInfo.isIOS
+      ? CupertinoIcons.exclamationmark_bubble
+      : material.Icons.error_outline;
   static IconData get search =>
       PlatformInfo.isIOS ? CupertinoIcons.search : material.Icons.search;
   static IconData get settings =>

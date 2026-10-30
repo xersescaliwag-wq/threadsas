@@ -16,7 +16,7 @@ class ThreadsApp extends StatelessWidget {
       // The supplied reference is a dark-first Threads experience. Keeping the
       // mode explicit also avoids an accidental light flash when the device is
       // configured for light appearance.
-      themeMode: ThemeMode.dark,
+      themeMode: ThemeMode.system,
       materialLightTheme: materialAppTheme(Brightness.light),
       materialDarkTheme: materialAppTheme(Brightness.dark),
       cupertinoLightTheme: const CupertinoThemeData(

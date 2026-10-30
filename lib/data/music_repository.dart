@@ -50,7 +50,7 @@ class MusicRepository {
                 track.id.isNotEmpty &&
                 track.title.isNotEmpty &&
                 track.artist.isNotEmpty &&
-                track.durationSeconds >= 30,
+                track.durationSeconds >= 60,
           )
           .toList(growable: false);
       _cache[cacheKey] = tracks;

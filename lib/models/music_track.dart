@@ -1,6 +1,6 @@
 // lib/models/music_track.dart
 
-/// A streamable track attached to a thread as a 30-second music sticker.
+/// A streamable track attached to a thread as a 60-second music sticker.
 class MusicTrack {
   const MusicTrack({
     required this.id,
@@ -44,9 +44,9 @@ class MusicTrack {
         ? Map<String, dynamic>.from(json['artwork'] as Map)
         : const <String, dynamic>{};
     final duration = (json['duration'] as num?)?.round() ?? 0;
+    final latestStart = duration > 60 ? duration - 60 : 0;
     final suggestedStart =
-        (json['preview_start_seconds'] as num?)?.round() ?? 0;
-    final latestStart = duration > 30 ? duration - 30 : 0;
+        (json['preview_start_seconds'] as num?)?.round() ?? latestStart;
     return MusicTrack(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '',

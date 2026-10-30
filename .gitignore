@@ -1,3 +1,13 @@
+# Node.js dependencies (supabase CLI tooling)
+node_modules/
+
+# Supabase local/temp state
+supabase/.temp/
+
+# Environment secrets
+.env
+.env.local
+
 # Miscellaneous
 *.class
 *.log
